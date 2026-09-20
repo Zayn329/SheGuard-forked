@@ -7,16 +7,18 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
+        MicroReportEntity::class,
         IncidentEntity::class,
         EvidenceEntryEntity::class,
         DetectionEventEntity::class,
         NotifyContactEntity::class,
         AuditEventEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SaharaDatabase : RoomDatabase() {
+    abstract fun microReportDao(): MicroReportDao
     abstract fun incidentDao(): IncidentDao
     abstract fun evidenceDao(): EvidenceDao
     abstract fun detectionEventDao(): DetectionEventDao
@@ -33,7 +35,9 @@ abstract class SaharaDatabase : RoomDatabase() {
                     context.applicationContext,
                     SaharaDatabase::class.java,
                     "sahara_db"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

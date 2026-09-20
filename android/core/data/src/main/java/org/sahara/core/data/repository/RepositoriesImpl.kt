@@ -8,6 +8,8 @@ import org.sahara.core.data.db.EvidenceDao
 import org.sahara.core.data.db.EvidenceEntryEntity
 import org.sahara.core.data.db.IncidentDao
 import org.sahara.core.data.db.IncidentEntity
+import org.sahara.core.data.db.MicroReportDao
+import org.sahara.core.data.db.MicroReportEntity
 import org.sahara.core.data.db.NotifyContactDao
 import org.sahara.core.data.db.NotifyContactEntity
 import org.sahara.core.domain.models.AuditEvent
@@ -17,12 +19,54 @@ import org.sahara.core.domain.models.EvidenceEntry
 import org.sahara.core.domain.models.EvidenceType
 import org.sahara.core.domain.models.Incident
 import org.sahara.core.domain.models.IncidentState
+import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.NotifyContact
+import org.sahara.core.domain.models.ReportCategory
+import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.repository.AuditRepository
 import org.sahara.core.domain.repository.ContactRepository
 import org.sahara.core.domain.repository.EvidenceRepository
 import org.sahara.core.domain.repository.IncidentRepository
+import org.sahara.core.domain.repository.MicroReportRepository
 import java.util.UUID
+
+class MicroReportRepositoryImpl(private val microReportDao: MicroReportDao) : MicroReportRepository {
+    override suspend fun saveReport(report: MicroReport) {
+        microReportDao.insertReport(report.toEntity())
+    }
+
+    override fun getAllReports(): Flow<List<MicroReport>> {
+        return microReportDao.getAllReports().map { list -> list.map { it.toDomain() } }
+    }
+
+    override suspend fun getReportById(id: UUID): MicroReport? {
+        return microReportDao.getReportById(id.toString())?.toDomain()
+    }
+
+    private fun MicroReportEntity.toDomain() = MicroReport(
+        reportId = UUID.fromString(reportId),
+        anonymousReporterToken = anonymousReporterToken,
+        category = ReportCategory.valueOf(category),
+        latitude = latitude,
+        longitude = longitude,
+        approximateArea = approximateArea,
+        timestamp = timestamp,
+        contextDescription = contextDescription,
+        syncStatus = SyncStatus.valueOf(syncStatus)
+    )
+
+    private fun MicroReport.toEntity() = MicroReportEntity(
+        reportId = reportId.toString(),
+        anonymousReporterToken = anonymousReporterToken,
+        category = category.name,
+        latitude = latitude,
+        longitude = longitude,
+        approximateArea = approximateArea,
+        timestamp = timestamp,
+        contextDescription = contextDescription,
+        syncStatus = syncStatus.name
+    )
+}
 
 class IncidentRepositoryImpl(private val incidentDao: IncidentDao) : IncidentRepository {
     override suspend fun getIncidentById(id: UUID): Incident? {

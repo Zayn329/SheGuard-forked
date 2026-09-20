@@ -6,8 +6,15 @@ import org.sahara.core.domain.models.DetectionEvent
 import org.sahara.core.domain.models.EvidenceEntry
 import org.sahara.core.domain.models.Incident
 import org.sahara.core.domain.models.IncidentState
+import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.NotifyContact
 import java.util.UUID
+
+interface MicroReportRepository {
+    suspend fun saveReport(report: MicroReport)
+    fun getAllReports(): Flow<List<MicroReport>>
+    suspend fun getReportById(id: UUID): MicroReport?
+}
 
 interface IncidentRepository {
     suspend fun getIncidentById(id: UUID): Incident?

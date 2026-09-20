@@ -7,6 +7,18 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface MicroReportDao {
+    @Query("SELECT * FROM micro_reports WHERE reportId = :id")
+    suspend fun getReportById(id: String): MicroReportEntity?
+
+    @Query("SELECT * FROM micro_reports ORDER BY timestamp DESC")
+    fun getAllReports(): Flow<List<MicroReportEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReport(report: MicroReportEntity)
+}
+
+@Dao
 interface IncidentDao {
     @Query("SELECT * FROM incidents WHERE incidentId = :id")
     suspend fun getIncidentById(id: String): IncidentEntity?
