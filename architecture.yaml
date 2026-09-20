@@ -1,70 +1,50 @@
 # =============================================================================
 # architecture.yaml
 # =============================================================================
-# Project: Women Safety Companion
+# Product: SheGuard
+# Team: Aegis
+# Problem Statement: CX1001 (teamAegis_CX1001_codex2026)
+# Domain: Women Safety & Social Impact — Preventive & Community Safety
+#
 # Purpose:
 #   Root architecture contract for an agent-assisted implementation harness.
+#   Aligned with the canonical product contract defined in docs/SHEGUARD_PRD.md.
 #
-# This file is intentionally implementation-oriented. It defines:
-#   - system boundaries
-#   - architectural invariants
-#   - modules and responsibilities
-#   - technology choices
-#   - data ownership
-#   - event contracts
-#   - security boundaries
-#   - external integrations
-#   - implementation constraints
-#   - acceptance criteria
-#
-# Companion harness files expected later:
-#   AGENTS.md
-#   specs/
-#     detection.yaml
-#     evidence.yaml
-#     mesh.yaml
-#     crypto.yaml
-#     backend.yaml
-#     legal.yaml
-#   bdd/
-#     core_safety.feature
-#     panic.feature
-#     evidence.feature
-#     mesh.feature
-#     notify_circle.feature
-#     legal_drafting.feature
-#   tests/
-#   docs/
-#
-# Architectural intent:
-#   Hackathon-functional, production-oriented MVP foundation.
-#   Core safety and evidence paths MUST remain functional without backend
-#   availability.
+# Offline-First Hierarchy:
+#   1. LOCAL OPERATION (Fundamental Guarantee): Local report creation, Room
+#      persistence, local pattern detection, trust evaluation, and alert generation.
+#   2. MESH COMMUNICATION (MVP Capability): BLE / Wi-Fi Direct peer-to-peer relay
+#      for disconnected nearby participating devices.
+#   3. BACKEND SYNCHRONIZATION (Supporting Capability): Asynchronous sync when
+#      Internet connectivity returns.
 # =============================================================================
 
-version: "1.0"
+version: "2.1"
 
 project:
-  name: "Women Safety Companion"
+  name: "SheGuard"
+  team: "Aegis"
+  problem_statement: "CX1001"
   repository_model: monorepo
   primary_platform: android
 
   goal: >
-    An offline-first personal safety companion that detects potential distress,
-    supports explicit panic activation, captures cryptographically protected
-    evidence, attempts local peer relay when connectivity is unavailable,
-    falls back to SMS, and optionally uses online services for notification
-    orchestration, legal drafting, and integrity anchoring.
+    An offline-first intelligent safety system that converts low-friction,
+    anonymous micro-reports into verified spatio-temporal risk patterns and
+    actionable community-level early warnings using local operation and BLE /
+    Wi-Fi Direct mesh relay without relying on cloud connectivity or LLMs.
 
   primary_design_principle: >
-    Safety-critical detection, evidence capture, cryptographic sealing, and
-    emergency escalation must not depend on an LLM, cloud backend, blockchain,
-    IPFS, or continuous internet connectivity.
+    The fundamental local pipeline (Report -> Local Persistence -> Detect -> Trust -> Alert)
+    must remain fully operational on-device without requiring Internet connectivity,
+    backend availability, mesh peers, or LLM services. Mesh communication enhances
+    local context by propagating compact reports and pattern signals between nearby
+    devices without becoming a hard prerequisite for local operation.
 
   implementation_target: >
     A genuinely functional hackathon implementation with real Android services,
-    sensors, cryptography, storage, networking, and deployable backend paths,
-    while allowing explicitly marked optional integrations to be mocked.
+    sensors, local Room storage, pattern engine, trust evaluator, Google Nearby
+    Connections mesh relay, and optional supporting backend paths.
 
 # -----------------------------------------------------------------------------
 # ARCHITECTURAL INVARIANTS
@@ -72,57 +52,53 @@ project:
 
 invariants:
 
-  core_safety_independence:
+  offline_first_local_guarantee:
     rule: >
-      The core safety path must remain operational when backend, internet,
-      blockchain, IPFS, and external AI providers are unavailable.
+      SheGuard does not require Internet or backend connectivity to create,
+      propagate, process, trust, or act on safety signals. Local operation is
+      the fundamental guarantee.
     applies_to:
-      - distress_detection
-      - panic_activation
-      - evidence_capture
-      - evidence_sealing
-      - local_storage
-      - mesh_attempt
-      - direct_sms_fallback
+      - micro_report_creation
+      - local_persistence
+      - spatio_temporal_pattern_detection
+      - trust_and_anti_gaming_evaluation
+      - rising_pattern_alert_generation
+      - store_and_forward_queuing
 
-  deterministic_trigger_path:
+  mesh_mvp_capability_degradation_boundary:
     rule: >
-      No LLM or generative AI component may participate in distress detection,
-      trigger confirmation, panic activation, evidence capture, cryptographic
-      sealing, or emergency escalation decisions.
+      BLE / Wi-Fi Direct mesh relay is an MVP communication capability that
+      allows nearby disconnected devices to exchange safety signals. Mesh
+      enhances the shared local safety picture, but mesh failure or absence
+      of nearby peer devices MUST NOT break local report creation, local persistence,
+      local pattern detection, or local early-warning alerting.
+    applies_to:
+      - mesh_relay
+      - peer_to_peer_packet_propagation
 
-  user_control:
+  deterministic_mvp_pipeline:
     rule: >
-      The user retains control over configuration, trusted contacts,
-      location-sharing permissions, evidence export, evidence deletion,
-      blockchain anchoring, and external sharing.
+      No LLM, generative AI, or agent component may participate in micro-report validation,
+      spatio-temporal pattern detection, trust scoring, anti-gaming checks,
+      mesh forwarding decisions, or early-warning alert generation.
 
-  irreversible_action_policy:
+  anti_gaming_trust_rule:
     rule: >
-      No AI agent may autonomously submit legal filings, contact authorities,
-      export raw evidence, upload raw evidence, or perform other irreversible
-      external actions without explicit policy approval and user authorization.
+      Raw report volume alone MUST NOT cause a pattern confidence escalation or
+      trigger an early-warning alert. Trust evaluation requires reporter diversity,
+      temporal independence, and spatial consistency.
 
-  raw_evidence_locality:
+  user_privacy_and_control:
     rule: >
-      Raw evidence must remain on-device by default. External systems may
-      receive only data explicitly authorized for transmission.
+      Micro-reports are anonymous by default. Micro-reports must not contain or
+      require personally identifying user information or continuous exact location
+      tracking.
 
   graceful_degradation:
     rule: >
-      Optional integrations must fail independently without preventing local
-      incident handling or evidence preservation.
-
-  auditability:
-    rule: >
-      Every safety-agent state transition and externally visible action must
-      create a local audit event.
-
-  explicit_optional_features:
-    rule: >
-      Blockchain, IPFS, ZK proofs, predictive routing, and advanced remote
-      synchronization must never become required dependencies for the first
-      working safety flow.
+      Supporting capabilities (evidence capture, backend sync, legal AI) and peer
+      transports (mesh) must fail independently without disrupting the core local
+      reporting, pattern detection, or early-warning alert flow.
 
 # -----------------------------------------------------------------------------
 # SYSTEM BOUNDARIES
@@ -133,55 +109,42 @@ system_boundaries:
   android_device:
     trust_level: trusted_execution_environment
     owns:
-      - user_interaction
-      - panic_activation
-      - deterministic_detection
-      - sensor_processing
-      - local_evidence_capture
-      - evidence_encryption
-      - evidence_signing
-      - incident_state
-      - mesh_transport
-      - direct_sms
+      - micro_report_creation
+      - local_report_persistence
+      - local_spatio_temporal_pattern_detection
+      - deterministic_trust_evaluation
+      - local_rising_pattern_alert_generation
+      - ble_wifi_direct_mesh_transport
+      - store_and_forward_queuing
+      - optional_sensor_processing
+      - optional_evidence_capture_and_encryption
       - local_audit_log
 
   backend:
     trust_level: authenticated_remote_service
     owns:
-      - optional_notification_orchestration
-      - authenticated_circle_services
-      - legal_drafting_requests
-      - legal_template_management
+      - optional_report_metadata_sync
+      - aggregated_pattern_sync
+      - optional_legal_drafting_requests
       - optional_integrity_anchoring
-      - metadata_storage
 
     must_not_require_for:
-      - distress_detection
-      - panic_trigger
-      - evidence_capture
-      - local_evidence_sealing
+      - micro_report_creation
+      - local_persistence
+      - mesh_relay
+      - local_pattern_detection
+      - local_trust_scoring
+      - local_early_warning_alerts
 
   external_ai_provider:
     trust_level: untrusted_external_processing_boundary
     permitted_data:
-      - explicitly_authorized_structured_incident_data
-      - redacted_evidence_summaries
-      - user_approved_context
+      - explicitly_authorized_structured_report_summaries
+      - aggregated_pattern_metadata
     prohibited_data_by_default:
       - raw_audio
-      - raw_sensor_streams
-      - raw_location_history
+      - exact_user_location_history
       - unencrypted_evidence
-
-  blockchain_network:
-    trust_level: optional_public_integrity_layer
-    enabled_by_default: false
-    may_receive:
-      - incident_merkle_root
-      - integrity_metadata
-      - timestamp_metadata
-    must_never_receive:
-      - raw_evidence
 
 # -----------------------------------------------------------------------------
 # REPOSITORY STRUCTURE
@@ -196,80 +159,27 @@ repository:
     android:
       path: android/
       purpose: >
-        Native Kotlin Android application containing UI, safety services,
-        detection, evidence, cryptography, local persistence, mesh, SMS,
-        and Notify Circle client functionality.
-
-      expected_structure:
-        app: android/app/
-        core:
-          domain: android/core/domain/
-          data: android/core/data/
-          security: android/core/security/
-          testing: android/core/testing/
-        features:
-          safety_agent: android/features/safety-agent/
-          panic: android/features/panic/
-          evidence: android/features/evidence/
-          mesh: android/features/mesh/
-          notify_circle: android/features/notify-circle/
-          check_in: android/features/check-in/
-          help_directory: android/features/help-directory/
-          settings: android/features/settings/
-          incident: android/features/incident/
-        services:
-          detection: android/services/detection/
-          evidence: android/services/evidence/
-          mesh: android/services/mesh/
-        assets:
-          models: android/app/src/main/assets/models/
-          help_directory: android/app/src/main/assets/help-directory/
+        Native Kotlin Android application containing UI, micro-reporting,
+        pattern engine, trust evaluator, local persistence, Google Nearby Connections
+        mesh relay, and supporting safety services.
 
     backend:
       path: backend/
       purpose: >
-        Minimal FastAPI service for optional online workflows and agentic
-        assistance.
-
-      expected_structure:
-        app: backend/app/
-        api: backend/app/api/
-        domain: backend/app/domain/
-        services: backend/app/services/
-        agents: backend/app/agents/
-        policies: backend/app/policies/
-        integrations: backend/app/integrations/
-        models: backend/app/models/
-        repositories: backend/app/repositories/
-        tests: backend/tests/
-
-    shared:
-      path: shared/
-      purpose: >
-        Language-neutral contracts, schemas, fixtures, and shared
-        architecture artifacts.
-
-      expected_structure:
-        contracts: shared/contracts/
-        schemas: shared/schemas/
-        fixtures: shared/fixtures/
-        legal_templates: shared/legal-templates/
+        Minimal FastAPI service for optional online pattern aggregation,
+        metadata sync, and AI legal/summary drafting.
 
     specs:
-      path: specs/
-      purpose: Focused architecture specifications referenced by this file.
+      path: docs/specs/
+      purpose: Focused architecture specifications.
 
     bdd:
       path: bdd/
       purpose: Behaviour specifications and acceptance scenarios.
 
-    tests:
-      path: tests/
-      purpose: Cross-component integration and end-to-end tests.
-
     docs:
       path: docs/
-      purpose: Human-readable architecture and operational documentation.
+      purpose: SheGuard product PRD, architecture, API, and ADR documentation.
 
 # -----------------------------------------------------------------------------
 # TECHNOLOGY DECISIONS
@@ -296,42 +206,26 @@ technology:
         technology: Android application-private storage
 
     background_execution:
-      safety_monitor:
-        technology: Android Foreground Service
-        requirement: >
-          Must use persistent user-visible notification and comply with Android
-          foreground service and microphone/location permission requirements.
-
-    machine_learning:
-      inference: TensorFlow Lite
-      keyword_spotting: TensorFlow Lite
-      scream_detection: >
-        Lightweight on-device classifier or hybrid signal-processing pipeline.
-        Pure FFT thresholding must not be treated as sufficient by itself.
-
-    sensors:
-      audio:
-        - AudioRecord
-        - Voice Activity Detection
-      motion:
-        - Accelerometer
+      pattern_monitor:
+        technology: Android Foreground Service / WorkManager
+        requirement: Must operate reliably offline.
 
     cryptography:
       hardware_keys: Android Keystore
       hashing: SHA-256
       evidence_encryption: AES-256-GCM
-      key_strategy: per_incident_data_key
-      key_wrapping: Android_Keystore_backed_key
 
     mesh:
       primary: Google Nearby Connections
       transports:
         - BLE
         - WiFi_Direct
-
-    sms:
-      device_transport: Android SmsManager
-      test_transport: mock_sms_provider
+      capabilities:
+        - peer_discovery
+        - compact_report_packet_forwarding
+        - store_and_forward
+        - deduplication_cache
+        - hop_limit_enforcement
 
   backend:
     language: Python
@@ -340,31 +234,13 @@ technology:
 
     persistence:
       primary: PostgreSQL
-      preferred_managed_option: Supabase
       local_development_option: PostgreSQL_or_SQLite
-
-    authentication:
-      primary: phone_otp
-      optional:
-        - google_sign_in
 
     ai:
       provider_strategy: provider_abstraction
       supported_provider_categories:
         - Groq
-        - Together
-        - Fireworks
         - local_model
-
-  verifier:
-    required_for_hackathon: false
-    optional:
-      type: static_web_page
-      responsibility:
-        - validate_manifest
-        - recompute_hashes
-        - verify_signatures
-        - display_integrity_result
 
 # -----------------------------------------------------------------------------
 # HIGH LEVEL COMPONENTS
@@ -372,690 +248,152 @@ technology:
 
 components:
 
-  safety_agent:
-    location: android
-    criticality: safety_critical
+  # --- CORE SHEGUARD MVP COMPONENTS ---
 
+  micro_reporter:
+    location: android
+    criticality: mvp_core
     responsibility: >
-      Coordinates deterministic local detection signals and incident state
-      transitions without involving backend or LLM services.
+      Provides low-friction, anonymous safety micro-reporting UI and local queuing
+      for incident/hazard categories (e.g., poor lighting, harassment, feeling followed).
 
-    subcomponents:
-      - keyword_detector
-      - scream_detector
-      - motion_detector
-      - signal_fusion_engine
-      - incident_state_machine
-      - battery_controller
-
-    constraints:
-      - no_network_dependency
-      - no_llm_dependency
-      - configurable_thresholds
-      - all_state_transitions_audited
-
-  panic_controller:
-    location: android
-    criticality: safety_critical
-
+  spatio_temporal_pattern_engine:
+    location: android_and_backend
+    criticality: mvp_core
     responsibility: >
-      Handles explicit in-app panic activation and supported physical gestures.
+      Aggregates micro-reports (local and mesh-received) within spatial proximity
+      (e.g., geohash / distance radius) and temporal windows (e.g., 30m / 2h)
+      to identify emerging risk patterns.
 
-    supported_triggers:
-      - in_app_button
-      - safe_volume_button_gesture
-      - optional_shake_gesture
-
-    constraints:
-      - must_not_interfere_with_oem_emergency_sos
-      - cancellation_countdown_required
-      cancellation_window_seconds:
-        minimum: 3
-        maximum: 5
-
-  evidence_engine:
-    location: android
-    criticality: safety_critical
-
+  trust_and_anti_gaming_evaluator:
+    location: android_and_backend
+    criticality: mvp_core
     responsibility: >
-      Captures, encrypts, signs, hashes, and stores incident evidence locally.
+      Evaluates report confidence based on reporter diversity, temporal independence,
+      spatial consistency, duplicate filtering, and rate-limiting anti-flooding checks.
+    invariant: >
+      Raw report count alone MUST NOT trigger a pattern escalation.
 
-    inputs:
-      - audio
-      - location
-      - accelerometer
-      - incident_metadata
-
-    optional_inputs:
-      - video
-
-    behavior:
-      pre_roll:
-        enabled: true
-        implementation: bounded_in_memory_audio_buffer
-      capture_start:
-        trigger: first_high_confidence_signal
-      discard_behavior:
-        rule: >
-          If the candidate incident is discarded before confirmation, temporary
-          pre-roll data must be securely discarded unless explicitly retained
-          by the user.
-      persistence:
-        critical_evidence_never_auto_deleted: true
-
-  crypto_engine:
+  rising_pattern_alert_engine:
     location: android
-    criticality: security_critical
+    criticality: mvp_core
+    responsibility: >
+      Surfaces verified emerging risk patterns as actionable early-warning alerts
+      containing spatial/temporal context and risk category.
 
-    responsibility:
-      - generate_per_incident_data_key
-      - encrypt_evidence
-      - hash_evidence_chunks
-      - sign_evidence_events
-      - maintain_incident_merkle_tree
-      - finalize_export_merkle_root
-
-    security_constraints:
-      - private_signing_keys_must_not_leave_android_keystore
-      - encryption_keys_must_not_be_hardcoded
-      - plaintext_evidence_must_not_be_uploaded_by_default
-      - nonce_reuse_for_aes_gcm_is_prohibited
+  # --- MVP COMMUNICATION CAPABILITY ---
 
   mesh_relay:
     location: android
-    criticality: important
-
-    responsibility:
-      - discover_opted_in_nearby_peers
-      - relay_distress_packets
-      - relay_evidence_hashes
-      - store_and_forward_packets
-      - enforce_hop_limits
-      - avoid_duplicate_relay_loops
-
-    defaults:
-      max_hops: 12
-      peer_scope: opted_in_same_app_users
-      encrypted_evidence_chunk_relay: disabled
-
-  fallback_manager:
-    location: android
-    criticality: safety_critical
-
+    criticality: mvp_mesh_communication
     responsibility: >
-      Applies escalation order without blocking evidence capture.
+      Relays compact, privacy-minimized micro-reports and pattern alerts peer-to-peer
+      via Google Nearby Connections (BLE / Wi-Fi Direct) between nearby participating
+      devices without Internet connectivity.
+    requirements:
+      - store_and_forward_semantics
+      - packet_deduplication_cache
+      - hop_count_limit_enforcement
+      - local_persistence_before_relay
+      - graceful_degradation_if_no_peers_found
+      - no_internet_requirement
 
-    escalation_order:
-      - mesh
-      - local_storage
-      - direct_sms
-      - backend_sync_when_available
+  # --- SUPPORTING / REUSABLE INFRASTRUCTURE COMPONENTS ---
 
-    rule: >
-      Failure of one transport must not delete or invalidate the incident.
+  evidence_engine:
+    location: android
+    criticality: supporting
+    responsibility: >
+      Captures, encrypts (AES-256-GCM), hashes (SHA-256), and Merkle-seals optional
+      incident evidence locally on-device.
 
   notify_circle:
     location: android_and_backend
-
-    responsibility:
-      - manage_trusted_contacts
-      - manage_contact_permissions
-      - send_distress_notifications
-      - provide_optional_live_location_updates
-      - record_delivery_and_acknowledgement
-
-    limits:
-      default_max_contacts: 3
-      configurable_max_contacts: 5
-
-    contact_types:
-      - app_user
-      - sms_only
-
-    location_policy:
-      user_revocable: true
-      active_incident_interval_seconds:
-        minimum: 30
-        maximum: 60
-
-  check_in:
-    location: android
-
-    responsibility:
-      - scheduled_check_ins
-      - one_tap_check_in
-      - delayed_missed_check_in_alert
-
-    constraint:
-      all_delays_user_configurable: true
-
-  help_directory:
-    location: android
-
-    responsibility:
-      - offline_police_directory
-      - helplines
-      - ngo_resources
-      - legal_aid_resources
-
-    initial_scope:
-      - Mumbai
-      - major_Maharashtra_cities
-
-    storage:
-      bundled: JSON_or_Room_seed_data
-      future_sync: optional
-
-  activity_log:
-    location: android
-
-    responsibility:
-      - record_detection_events
-      - record_state_transitions
-      - record_transport_attempts
-      - record_policy_decisions
-
-    storage:
-      format:
-        - SQLite
-        - JSON_export
-
-    privacy:
-      sensitive_payload_logging_prohibited: true
-
-  backend_api:
-    location: backend
-
-    responsibility:
-      - authenticated_optional_remote_services
-      - legal_draft_requests
-      - notification_orchestration
-      - integrity_anchor_requests
-
-    constraint:
-      core_safety_path_dependency: prohibited
+    criticality: supporting_legacy
+    responsibility: >
+      Optional trusted contacts management and alert fan-out.
 
   legal_agent:
     location: backend
-    criticality: non_safety_critical
-
-    responsibility:
-      - convert_structured_incident_data_to_draft
-      - generate_incident_summary
-      - generate_fir_style_draft
-
-    architecture:
-      pattern: constrained_agent_workflow
-
-    requirements:
-      - provider_abstraction
-      - structured_input
-      - configurable_templates
-      - explicit_policy_check
-      - output_must_be_labeled_draft
-
-    prohibited_actions:
-      - autonomous_filing
-      - autonomous_authority_contact
-      - autonomous_evidence_export
-
-  anchoring_agent:
-    location: backend
-    enabled_by_default: false
-
-    responsibility:
-      - optionally_anchor_merkle_root
-      - optionally_generate_integrity_receipt
-
-    permitted_payload:
-      - merkle_root
-      - minimal_integrity_metadata
-
-    prohibited_payload:
-      - raw_evidence
-
-  predictive_routing:
-    status: deferred
-    implementation_required_for_v1: false
+    criticality: supporting_optional
+    responsibility: >
+      Converts structured incident/report data into FIR/complaint drafts with mandatory legal disclaimer.
 
 # -----------------------------------------------------------------------------
-# INCIDENT STATE MACHINE
+# SHEGUARD DATA & COMMUNICATION FLOW
 # -----------------------------------------------------------------------------
 
-incident_state_machine:
+data_and_communication_flow:
+  concept: >
+    Local persistence and local detection form the fundamental guarantee.
+    Mesh communication operates alongside local persistence to exchange
+    reports with nearby devices. Backend sync occurs asynchronously when
+    Internet is restored.
 
-  states:
-    - idle
-    - monitoring
-    - suspicious_signal
-    - candidate_incident
-    - pending_confirmation
-    - active_incident
-    - cancelled
-    - sealed
-    - export_pending
-    - exported
+  diagram: >
+    [ Anonymous Report ] -> [ Local Persistence (Room) ] -> [ Local Detect / Trust / Alert ] <--> [ BLE / Wi-Fi Direct Mesh Relay ] -> [ Optional Backend Sync (when online) ]
+
+# -----------------------------------------------------------------------------
+# SHEGUARD REPORT & PATTERN LIFECYCLE STATE MACHINE
+# -----------------------------------------------------------------------------
+
+reporting_pattern_state_machine:
+
+  report_states:
+    - created
+    - stored_locally
+    - mesh_queued
+    - mesh_relayed
+    - validated
+    - contributing_to_pattern
+    - synced
+
+  pattern_states:
+    - inactive
+    - pattern_candidate
+    - trust_evaluating
+    - pattern_emerging
+    - alert_active
+    - resolved
     - archived
 
   transitions:
 
-    monitoring_to_suspicious_signal:
-      trigger:
-        - keyword_detected
-        - scream_high_confidence
-        - motion_anomaly
-
-    suspicious_signal_to_candidate_incident:
-      trigger: confidence_threshold_reached
-
-    candidate_incident_to_pending_confirmation:
+    report_creation:
+      trigger: user_submits_micro_report
       actions:
-        - start_evidence_pre_roll_persistence
-        - start_candidate_audit_log
-
-    pending_confirmation_to_active_incident:
-      trigger:
-        - panic_activation
-        - configured_multi_signal_rule_satisfied
-
-    pending_confirmation_to_cancelled:
-      trigger:
-        - confirmation_window_expired
-        - user_cancelled
-
-    active_incident_to_sealed:
-      required_actions:
-        - finalize_evidence_chunks
-        - calculate_final_hashes
-        - finalize_merkle_root
-        - sign_incident_manifest
-
-    sealed_to_export_pending:
-      trigger: user_requests_export
-
-    export_pending_to_exported:
-      trigger: export_integrity_verification_success
-
-  confirmation_window_seconds:
-    default: 6
-    configurable_range:
-      minimum: 5
-      maximum: 8
-
-# -----------------------------------------------------------------------------
-# DETECTION POLICY
-# -----------------------------------------------------------------------------
-
-detection:
-
-  execution:
-    mode: on_device
-
-  default_confirmation_rule:
-    expression: "keyword OR (scream AND motion)"
-
-  configurable:
-    - trigger_words
-    - keyword_confidence
-    - scream_confidence
-    - motion_threshold
-    - signal_combination_rule
-    - confirmation_window
-
-  keyword_detection:
-    implementation: TensorFlow_Lite
-    requirements:
-      - configurable_keywords
-      - confidence_score
-      - model_version_logged
-
-  scream_detection:
-    implementation: hybrid_signal_processing_plus_lightweight_model
-
-    requirements:
-      - audio_windowing
-      - frequency_features
-      - amplitude_features
-      - classifier_confidence
-      - false_positive_resistance
-
-  motion_detection:
-    inputs:
-      - accelerometer
-
-    candidate_events:
-      - hard_impact
-      - unusual_motion_pattern
-      - prolonged_stillness
-
-    constraint: >
-      Motion alone must not silently escalate to evidence sharing or external
-      notification unless explicitly enabled by a user-configured rule.
-
-  battery_optimization:
-    strategies:
-      - duty_cycling
-      - voice_activity_detection
-      - bounded_audio_buffers
-      - adaptive_sensor_sampling
-
-# -----------------------------------------------------------------------------
-# EVIDENCE ARCHITECTURE
-# -----------------------------------------------------------------------------
-
-evidence:
-
-  storage:
-    primary: local_encrypted_storage
-    database_metadata: Room_SQLite
-
-  evidence_types:
-    - audio
-    - location
-    - accelerometer
-
-  optional_evidence_types:
-    - video
-
-  chunking:
-    enabled: true
-    reason:
-      - streaming_integrity
-      - bounded_memory
-      - incremental_hashing
-
-  manifest:
-    required: true
-
-    fields:
-      - incident_id
-      - created_at
-      - evidence_entries
-      - chunk_hashes
-      - merkle_root
-      - signing_key_metadata
-      - signature
-      - application_version
-      - detection_model_versions
-
-  retention:
-    default_days_range:
-      minimum: 30
-      maximum: 90
-
-    critical_incidents:
-      auto_delete: false
-
-    deletion:
-      requires_user_action: true
-
-# -----------------------------------------------------------------------------
-# CRYPTOGRAPHIC CONTRACT
-# -----------------------------------------------------------------------------
-
-security:
-
-  evidence_encryption:
-
-    algorithm: AES-256-GCM
-
-    key_model:
-      incident_data_key:
-        generated_per_incident: true
-        random_generation_required: true
-
-      wrapping_key:
-        source: Android_Keystore
-        hardware_backed_when_available: true
-
-    requirements:
-      - authenticated_encryption
-      - unique_nonce_per_encryption_operation
-      - no_plaintext_key_persistence
-
-  hashing:
-    algorithm: SHA-256
-
-  signing:
-    key_source: Android_Keystore
-
-    requirement: >
-      Evidence events and finalized incident manifests must be signed using a
-      device-protected signing key where supported.
-
-  merkle_integrity:
-
-    modes:
-      - incremental_per_incident
-      - finalized_per_export
-
-    leaf_definition: >
-      SHA-256 hash of canonicalized evidence chunk metadata and encrypted
-      evidence content representation.
-
-    requirement:
-      canonical_serialization: true
-
-  export_verification:
-    required:
-      - recompute_chunk_hashes
-      - verify_merkle_root
-      - verify_manifest_signature
-
-# -----------------------------------------------------------------------------
-# MESH AND DELIVERY ARCHITECTURE
-# -----------------------------------------------------------------------------
-
-networking:
-
-  mesh:
-
-    implementation: Google_Nearby_Connections
-
-    discovery:
-      scope: opted_in_app_users
-
-    packet:
-
-      required_fields:
-        - packet_id
-        - incident_id
-        - packet_type
-        - created_at
-        - hop_count
-        - max_hops
-        - sender_integrity_metadata
-        - payload_hash
-
-      anti_loop:
-        mechanism: packet_id_deduplication_cache
-
-      default_max_hops: 12
-
-    primary_payloads:
-      - distress_alert
-      - approximate_location
-      - evidence_hash
-      - delivery_receipt
-
-    optional_payloads:
-      - encrypted_evidence_chunk
-
-  fallback:
-
-    trigger_conditions:
-      - mesh_delivery_failure
-      - mesh_timeout
-
-    timeout:
-      configurable: true
-      must_be_short: true
-
-    direct_sms:
-      enabled_when_permissions_available: true
-
-      payload:
-        - incident_identifier
-        - last_known_location
-        - evidence_integrity_hash
-        - timestamp
-
-    backend_delivery:
-      condition: connectivity_available
-      role: secondary
-
-# -----------------------------------------------------------------------------
-# BACKEND API BOUNDARY
-# -----------------------------------------------------------------------------
-
-backend:
-
-  service: FastAPI
-
-  api_principles:
-    - versioned_routes
-    - schema_validation
-    - explicit_authentication
-    - structured_errors
-    - idempotency_for_mutating_requests
-
-  endpoints:
-
-    incidents:
-      base_path: /api/v1/incidents
-      purpose: optional_metadata_sync
-
-    notifications:
-      base_path: /api/v1/notifications
-      purpose: optional_notification_orchestration
-
-    legal:
-      base_path: /api/v1/legal
-      purpose: draft_generation
-
-    anchoring:
-      base_path: /api/v1/anchoring
-      purpose: optional_merkle_root_anchoring
-
-  persistence:
-
-    allowed:
-      - user_metadata
-      - contact_metadata
-      - incident_metadata
-      - delivery_metadata
-      - legal_draft_metadata
-      - integrity_roots
-
-    prohibited_by_default:
-      - raw_audio
-      - raw_video
-      - unencrypted_sensor_data
-
-# -----------------------------------------------------------------------------
-# AGENTIC ARCHITECTURE
-# -----------------------------------------------------------------------------
-
-agents:
-
-  principle: >
-    Agentic workflows are restricted to non-safety-critical online assistance.
-    Deterministic software controls all detection and emergency escalation.
-
-  common_requirements:
-    - explicit_input_schema
-    - explicit_output_schema
-    - policy_check_before_external_action
-    - audit_log
-    - provider_abstraction
-    - timeout
-    - failure_fallback
-
-  legal_drafting_agent:
-
-    inputs:
-      - structured_incident_summary
-      - user_authorized_evidence_metadata
-      - user_selected_template
-
-    outputs:
-      - incident_summary_draft
-      - fir_style_draft
-
-    output_requirements:
-      mandatory_notice: >
-        DRAFT FOR HUMAN AND LEGAL REVIEW. THIS DOCUMENT HAS NOT BEEN FILED
-        WITH ANY AUTHORITY.
-
-    authority:
-      may:
-        - draft
-        - summarize
-        - suggest
-
-      may_not:
-        - submit
-        - file
-        - contact_police
-        - contact_employer
-        - upload_raw_evidence
-
-  notify_orchestrator:
-
-    inputs:
-      - incident_state
-      - user_permissions
-      - contact_preferences
-
-    authority:
-      may:
-        - prepare_notifications
-        - route_authorized_notifications
-
-      requires_policy_approval:
-        - sending_external_message
-        - sharing_location
-
-  anchoring_agent:
-
-    status: optional
-
-    requires:
-      - explicit_user_or_feature_flag_enablement
-      - finalized_merkle_root
-
-    permitted_action:
-      - anchor_root
-
-# -----------------------------------------------------------------------------
-# POLICY ENFORCEMENT
-# -----------------------------------------------------------------------------
-
-policy_engine:
-
-  required_for:
-    - external_notification
-    - location_sharing
-    - backend_sync
-    - legal_agent_request
-    - evidence_export
-    - blockchain_anchoring
-    - ipfs_upload
-
-  decision_types:
-    - allow
-    - deny
-    - require_user_confirmation
-
-  evaluation_inputs:
-    - user_settings
-    - incident_state
-    - requested_action
-    - recipient
-    - evidence_scope
-
-  rule:
-    deny_by_default: true
+        - save_locally_room
+        - assign_anonymous_token
+        - queue_for_pattern_evaluation
+        - queue_for_mesh_relay_if_enabled
+
+    mesh_relay_propagation:
+      trigger: nearby_peers_discovered
+      actions:
+        - forward_compact_packet_over_ble_or_wifi_direct
+        - update_packet_hop_count
+        - record_deduplication_hash
+
+    pattern_evaluation:
+      trigger: spatio_temporal_proximity_detected
+      condition: report_count_and_spatial_window_met
+      next_state: pattern_candidate
+
+    trust_validation:
+      trigger: evaluate_trust_signals
+      conditions:
+        - reporter_diversity_score_above_threshold
+        - temporal_independence_verified
+        - duplicate_flooding_check_passed
+      success_state: pattern_emerging
+      failure_state: pattern_candidate
+
+    alert_generation:
+      trigger: pattern_emerging
+      actions:
+        - generate_rising_pattern_alert
+        - notify_local_user
+        - broadcast_via_mesh_if_enabled
 
 # -----------------------------------------------------------------------------
 # DATA MODELS
@@ -1063,71 +401,52 @@ policy_engine:
 
 data_models:
 
-  Incident:
-
+  MicroReport:
     fields:
-      incident_id: uuid
-      state: enum
+      report_id: uuid
+      anonymous_reporter_token: string
+      category: enum # poor_lighting, harassment, feeling_followed, unsafe_gathering, suspicious_activity
+      latitude: number_nullable
+      longitude: number_nullable
+      approximate_area: string
+      timestamp: timestamp
+      context_description: string_nullable
+      sync_status: enum # local, mesh_queued, synced
+
+  MeshPacket:
+    fields:
+      packet_id: uuid
+      report_id: uuid
+      payload_type: enum # micro_report, pattern_alert
       created_at: timestamp
-      activated_at: timestamp_nullable
-      sealed_at: timestamp_nullable
-      trigger_sources: list
-      configuration_snapshot: object
-      final_merkle_root: string_nullable
+      hop_count: integer
+      max_hops: integer # default: 12
+      payload_hash: string
+      compact_payload: bytes
 
-  EvidenceEntry:
-
+  SpatioTemporalPattern:
     fields:
-      evidence_id: uuid
-      incident_id: uuid
-      type: enum
+      pattern_id: uuid
+      center_latitude: number
+      center_longitude: number
+      radius_meters: number
+      category: enum
+      first_reported_at: timestamp
+      last_reported_at: timestamp
+      report_count: integer
+      trust_score: number
+      state: enum # candidate, emerging, alert_active, resolved
+
+  RisingPatternAlert:
+    fields:
+      alert_id: uuid
+      pattern_id: uuid
+      category: enum
+      approximate_location: string
+      time_window: string
+      trust_level: string # low, medium, high
       created_at: timestamp
-      encrypted_path: string
-      sha256: string
-      signature_reference: string
-      chunk_index: integer_nullable
-
-  DetectionEvent:
-
-    fields:
-      event_id: uuid
-      incident_id: uuid_nullable
-      detector_type: enum
-      confidence: number
-      occurred_at: timestamp
-      model_version: string_nullable
-
-  NotifyContact:
-
-    fields:
-      contact_id: uuid
-      display_name: string
-      type: enum
-      phone_number: string_nullable
-      app_user_id: uuid_nullable
-      location_permission: boolean
-      notification_permission: boolean
-
-  AuditEvent:
-
-    fields:
-      audit_id: uuid
-      occurred_at: timestamp
-      component: string
-      action: string
-      result: enum
-      incident_id: uuid_nullable
-      metadata: object
-
-  LegalDraftRequest:
-
-    fields:
-      request_id: uuid
-      incident_id: uuid
-      draft_type: enum
-      authorized_data_scope: object
-      created_at: timestamp
-      user_authorized: boolean
+      disclaimer: string # "EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."
 
 # -----------------------------------------------------------------------------
 # EVENT CONTRACTS
@@ -1138,443 +457,73 @@ events:
   naming:
     style: domain.past_tense
 
-  core:
+  core_mvp:
+    - report.created
+    - report.stored_locally
+    - report.validated
+    - report.rejected
+    - pattern.candidate_detected
+    - pattern.trust_evaluated
+    - pattern.emerging
+    - alert.generated
 
-    - detection.keyword_detected
-    - detection.scream_detected
-    - detection.motion_anomaly_detected
+  mvp_mesh_communication:
+    - mesh.peer_discovered
+    - mesh.packet_queued
+    - mesh.packet_relayed
+    - mesh.packet_received
+    - mesh.duplicate_dropped
 
-    - incident.candidate_created
-    - incident.confirmation_started
-    - incident.activated
-    - incident.cancelled
-    - incident.sealed
-
-    - evidence.chunk_created
-    - evidence.chunk_encrypted
-    - evidence.chunk_signed
-    - evidence.merkle_root_finalized
-
-    - mesh.delivery_attempted
-    - mesh.delivery_failed
-    - sms.fallback_triggered
-    - notification.sent
-
-    - policy.action_allowed
-    - policy.action_denied
-    - policy.user_confirmation_required
-
-  event_rules:
-    - events_must_be_idempotently_processable
-    - events_must_not_contain_raw_evidence
-    - sensitive_location_data_must_be_minimized
+  supporting:
+    - evidence.captured
+    - evidence.sealed
+    - sync.completed
 
 # -----------------------------------------------------------------------------
-# FAILURE HANDLING
+# FAILURE HANDLING & DEGRADATION
 # -----------------------------------------------------------------------------
 
 failure_modes:
 
+  network_unavailable:
+    expected_behavior:
+      - save_micro_report_locally
+      - run_local_pattern_and_trust_evaluator
+      - relay_via_ble_wifi_direct_mesh_if_peers_present
+      - queue_for_backend_sync_when_connectivity_returns
+
+  mesh_unavailable_or_no_peers:
+    expected_behavior:
+      - save_micro_report_locally
+      - run_local_pattern_and_trust_evaluator
+      - queue_mesh_packets_locally_without_error
+      - local_reporting_and_alerting_unaffected
+
   backend_unavailable:
     expected_behavior:
-      - continue_local_incident_flow
-      - retain_local_evidence
-      - queue_optional_sync
+      - core_reporting_mesh_and_alerting_unaffected
+      - sync_queued_until_reconnected
 
   ai_provider_unavailable:
     expected_behavior:
       - legal_drafting_unavailable
-      - evidence_and_incident_flow_unaffected
-
-  mesh_unavailable:
-    expected_behavior:
-      - retain_packet_locally
-      - attempt_sms_fallback
-
-  sms_unavailable:
-    expected_behavior:
-      - retain_incident
-      - queue_backend_delivery_when_available
-
-  keystore_failure:
-    severity: critical
-    expected_behavior:
-      - do_not_silently_store_unencrypted_evidence
-      - surface_security_error
-      - preserve_non-sensitive_metadata_when_possible
-
-  storage_pressure:
-    expected_behavior:
-      - stop_nonessential_capture
-      - preserve_sealed_incidents
-      - notify_user
-      - never_auto_delete_critical_evidence
-
-  app_process_restart:
-    expected_behavior:
-      - recover_incident_state
-      - recover_pending_evidence_metadata
-      - validate_incomplete_incident
-      - resume_only_when_android_permissions_allow
+      - micro_reporting_mesh_and_pattern_alerts_unaffected
 
 # -----------------------------------------------------------------------------
-# PERMISSIONS AND PRIVACY
+# PRIVACY AND PERMISSIONS
 # -----------------------------------------------------------------------------
-
-android_permissions:
-
-  runtime_permissions:
-    - RECORD_AUDIO
-    - ACCESS_FINE_LOCATION
-    - ACCESS_COARSE_LOCATION
-    - POST_NOTIFICATIONS
-    - SEND_SMS
-
-  conditional_permissions:
-    bluetooth:
-      - BLUETOOTH_SCAN
-      - BLUETOOTH_CONNECT
-      - BLUETOOTH_ADVERTISE
-
-    foreground_service:
-      - FOREGROUND_SERVICE
-      - FOREGROUND_SERVICE_MICROPHONE
-      - FOREGROUND_SERVICE_LOCATION
-
-  requirements:
-    - request_just_in_time_where_possible
-    - explain_safety_reason_before_request
-    - feature_must_degrade_when_permission_denied
 
 privacy:
 
   defaults:
-    live_location_sharing: disabled_until_enabled
-    blockchain_anchoring: disabled
-    ipfs_upload: disabled
+    anonymous_reporting: enabled_by_default
+    continuous_location_tracking: disabled
     raw_evidence_upload: disabled
 
   principles:
     - data_minimization
-    - explicit_consent
+    - anonymous_by_default
     - local_first
-    - revocable_sharing
-    - least_privilege
-
-# -----------------------------------------------------------------------------
-# ENVIRONMENT VARIABLES
-# -----------------------------------------------------------------------------
-
-environment:
-
-  android:
-
-    local_properties:
-      description: >
-        Secrets must not be committed. Local Android development configuration
-        belongs outside version control where appropriate.
-
-    variables:
-      API_BASE_URL:
-        required_for: optional_backend
-      GOOGLE_MAPS_API_KEY:
-        required_for: future_mapping_only
-        required_for_v1: false
-
-  backend:
-
-    required:
-      DATABASE_URL:
-        description: PostgreSQL connection URL
-
-      AUTH_SECRET:
-        description: Backend authentication secret
-
-    optional:
-      LLM_PROVIDER:
-        description: Selected legal drafting provider
-
-      LLM_API_KEY:
-        description: Provider API key
-
-      SUPABASE_URL:
-        description: Managed PostgreSQL platform configuration
-
-      SUPABASE_SERVICE_KEY:
-        description: Server-only Supabase credential
-
-      ANCHORING_ENABLED:
-        description: Enables optional integrity anchoring
-        default: "false"
-
-      POLYGON_RPC_URL:
-        description: Optional blockchain RPC endpoint
-
-      POLYGON_PRIVATE_KEY:
-        description: Optional testnet anchoring key
-        secret: true
-
-      IPFS_ENABLED:
-        description: Enables optional IPFS integration
-        default: "false"
-
-      IPFS_PROVIDER_TOKEN:
-        description: Optional IPFS provider credential
-        secret: true
-
-secret_rules:
-  - never_commit_secrets
-  - provide_env_example_files
-  - backend_secrets_server_side_only
-  - never_log_api_keys
-  - never_store_private_keys_in_android_source
-
-# -----------------------------------------------------------------------------
-# DEVELOPMENT COMMAND CONTRACT
-# -----------------------------------------------------------------------------
-
-commands:
-
-  android:
-
-    install_debug:
-      command: "./gradlew installDebug"
-
-    unit_tests:
-      command: "./gradlew testDebugUnitTest"
-
-    instrumentation_tests:
-      command: "./gradlew connectedDebugAndroidTest"
-
-    lint:
-      command: "./gradlew lint"
-
-  backend:
-
-    install:
-      command: "uv sync"
-
-    development:
-      command: "uv run uvicorn app.main:app --reload"
-
-    tests:
-      command: "uv run pytest"
-
-    lint:
-      command: "uv run ruff check ."
-
-# -----------------------------------------------------------------------------
-# TESTING STRATEGY
-# -----------------------------------------------------------------------------
-
-testing:
-
-  philosophy: >
-    Safety-critical state transitions and cryptographic behavior require
-    deterministic tests before UI-level testing.
-
-  layers:
-
-    unit:
-      required:
-        - signal_fusion
-        - incident_state_machine
-        - crypto_engine
-        - merkle_tree
-        - packet_hop_limits
-        - policy_engine
-        - legal_agent_output_validation
-
-    integration:
-      required:
-        - detection_to_incident_activation
-        - evidence_to_sealing
-        - mesh_to_sms_fallback
-        - backend_optional_failure
-        - export_verification
-
-    android_instrumentation:
-      required:
-        - permission_degradation
-        - foreground_service_lifecycle
-        - local_database_recovery
-
-    physical_device:
-      required_for_demo:
-        - microphone_capture
-        - motion_sensor_detection
-        - real_sms
-        - nearby_connections
-
-  mandatory_test_properties:
-    - core_flow_without_internet
-    - backend_failure_does_not_break_incident
-    - llm_failure_does_not_break_incident
-    - tampered_evidence_fails_verification
-    - raw_evidence_not_sent_without_authorization
-
-# -----------------------------------------------------------------------------
-# HACKATHON ACCEPTANCE CRITERIA
-# -----------------------------------------------------------------------------
-
-acceptance_criteria:
-
-  core_safety:
-
-    - >
-      The application can run a user-visible Android foreground safety service
-      on a physical Android device.
-
-    - >
-      A supported keyword detection path can generate a real candidate safety
-      signal using on-device inference.
-
-    - >
-      A scream detection path processes real microphone input and produces a
-      confidence signal.
-
-    - >
-      Accelerometer input contributes to configurable signal fusion.
-
-    - >
-      The default rule keyword OR (scream AND motion) can activate a confirmed
-      incident.
-
-  panic:
-
-    - >
-      The in-app panic trigger creates an incident immediately after the
-      configured cancellation window.
-
-    - >
-      Physical gesture support must never intentionally interfere with OEM
-      Emergency SOS.
-
-  evidence:
-
-    - >
-      Audio, location, and accelerometer evidence are captured during an active
-      incident.
-
-    - >
-      Evidence is encrypted locally.
-
-    - >
-      Evidence chunks are hashed using SHA-256.
-
-    - >
-      A Merkle root is generated for the incident.
-
-    - >
-      A finalized evidence manifest is signed using Android Keystore-backed
-      cryptographic material where available.
-
-  offline_delivery:
-
-    - >
-      The application attempts Nearby Connections delivery before network-based
-      synchronization.
-
-    - >
-      Mesh packets enforce hop limits and duplicate prevention.
-
-    - >
-      SMS fallback can be demonstrated on a physical device or through a
-      clearly separated mock transport.
-
-  notify_circle:
-
-    - >
-      The user can configure at least one app or SMS Notify Circle contact.
-
-    - >
-      Incident notifications follow explicit sharing permissions.
-
-  legal:
-
-    - >
-      A structured incident package can be sent to the backend.
-
-    - >
-      The backend can generate an incident summary or FIR-style draft through
-      an abstracted LLM provider.
-
-    - >
-      Every generated document contains the mandatory draft and legal-review
-      disclaimer.
-
-  resilience:
-
-    - >
-      Disconnecting the internet must not stop local detection, evidence
-      capture, sealing, or local incident persistence.
-
-    - >
-      Backend failure must not invalidate an active incident.
-
-  integrity:
-
-    - >
-      Modifying an exported evidence artifact causes verification failure.
-
-# -----------------------------------------------------------------------------
-# EXPLICIT NON-GOALS FOR V1
-# -----------------------------------------------------------------------------
-
-non_goals:
-
-  - predictive_safe_routing
-  - safetipin_integration
-  - nasa_black_marble_processing
-  - mandatory_blockchain_anchoring
-  - mandatory_ipfs
-  - mandatory_zk_proofs
-  - raw_evidence_cloud_backup
-  - automatic_legal_filing
-  - autonomous_police_contact
-  - production_scale_mesh_optimization
-  - guaranteed_background_execution_beyond_android_platform_limits
-
-# -----------------------------------------------------------------------------
-# FUTURE SPECIFICATIONS
-# -----------------------------------------------------------------------------
-
-references:
-
-  required_future_files:
-    - path: AGENTS.md
-      purpose: >
-        Defines coding-agent roles, authority boundaries, implementation rules,
-        and prohibited assumptions.
-
-    - path: specs/detection.yaml
-      purpose: Detection thresholds, model contracts, fusion logic.
-
-    - path: specs/evidence.yaml
-      purpose: Evidence lifecycle and manifest format.
-
-    - path: specs/crypto.yaml
-      purpose: Canonical cryptographic formats and verification rules.
-
-    - path: specs/mesh.yaml
-      purpose: Packet schemas and relay behavior.
-
-    - path: specs/backend.yaml
-      purpose: FastAPI route and persistence contracts.
-
-    - path: specs/legal.yaml
-      purpose: Legal agent input/output contracts and safety policies.
-
-  bdd:
-    directory: bdd/
-    required_features:
-      - core_safety.feature
-      - panic.feature
-      - evidence.feature
-      - crypto.feature
-      - mesh.feature
-      - notify_circle.feature
-      - legal_drafting.feature
 
 # -----------------------------------------------------------------------------
 # IMPLEMENTATION PRIORITY
@@ -1582,41 +531,20 @@ references:
 
 implementation_priority:
 
-  phase_1_core_demo:
+  phase_1_sheguard_mvp:
     required:
-      - android_project_foundation
-      - incident_state_machine
-      - foreground_safety_service
-      - panic_button
-      - accelerometer_detection
-      - audio_capture
-      - basic_keyword_model_integration
-      - evidence_encryption
-      - hashing
-      - merkle_tree
-      - local_persistence
-      - notify_circle
-      - sms_fallback
+      - micro_report_ui_and_room_persistence
+      - google_nearby_connections_mesh_relay
+      - spatio_temporal_pattern_engine
+      - trust_and_anti_gaming_evaluator
+      - rising_pattern_alert_display
 
-  phase_2_functional_strength:
+  phase_2_supporting_infrastructure:
     required:
-      - scream_classifier
-      - configurable_signal_fusion
-      - Nearby_Connections_mesh
-      - Android_Keystore_signing
-      - evidence_export_verification
-      - FastAPI_backend
-      - legal_drafting_agent
+      - local_evidence_encryption_and_merkle_sealing
+      - fastapi_backend_pattern_sync
 
-  phase_3_optional_showcase:
+  phase_3_extended:
     optional:
-      - blockchain_testnet_anchoring
-      - static_verifier_page
-      - encrypted_evidence_chunk_relay
-      - basic_ZK_proof
-      - video_capture
-      - expanded_help_directory
-
-# =============================================================================
-# END OF ARCHITECTURE CONTRACT
-# =============================================================================
+      - legal_ai_drafting_agent
+      - integrity_anchoring
