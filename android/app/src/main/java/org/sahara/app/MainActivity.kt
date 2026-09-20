@@ -40,11 +40,15 @@ import org.sahara.app.ui.SafetyWatchScreen
 import org.sahara.app.ui.SaharaTheme
 import org.sahara.app.ui.TrustedContactAlertScreen
 import org.sahara.app.ui.WelcomeScreen
+import org.sahara.app.ui.SheGuardReportingScreen
 import org.sahara.core.data.db.SaharaDatabase
+import org.sahara.core.data.repository.AlertRepositoryImpl
 import org.sahara.core.data.repository.AuditRepositoryImpl
 import org.sahara.core.data.repository.ContactRepositoryImpl
 import org.sahara.core.data.repository.EvidenceRepositoryImpl
 import org.sahara.core.data.repository.IncidentRepositoryImpl
+import org.sahara.core.data.repository.MicroReportRepositoryImpl
+import org.sahara.core.data.repository.PatternRepositoryImpl
 import org.sahara.features.notifycircle.manager.NotifyCircleManager
 import org.sahara.services.mesh.fallback.EscalationFallbackManager
 import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
@@ -79,7 +83,8 @@ enum class Screen {
     AUTH,
     LEGAL_DRAFTING,
     ANCHORING,
-    DETECTION_LOG
+    DETECTION_LOG,
+    SHEGUARD_REPORTING
 }
 
 class MainActivity : ComponentActivity() {
@@ -88,6 +93,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var incidentRepository: IncidentRepositoryImpl
     private lateinit var evidenceRepository: EvidenceRepositoryImpl
     private lateinit var auditRepository: AuditRepositoryImpl
+    private lateinit var microReportRepository: MicroReportRepositoryImpl
+    private lateinit var patternRepository: PatternRepositoryImpl
+    private lateinit var alertRepository: AlertRepositoryImpl
     private lateinit var stateMachine: IncidentStateMachine
     private lateinit var panicController: PanicController
     private lateinit var keyManager: KeyStorageManagerImpl
@@ -120,6 +128,9 @@ class MainActivity : ComponentActivity() {
         incidentRepository = IncidentRepositoryImpl(database.incidentDao())
         evidenceRepository = EvidenceRepositoryImpl(database.evidenceDao())
         auditRepository = AuditRepositoryImpl(database.auditEventDao())
+        microReportRepository = MicroReportRepositoryImpl(database.microReportDao())
+        patternRepository = PatternRepositoryImpl(database.patternDao())
+        alertRepository = AlertRepositoryImpl(database.alertDao())
         val contactRepository = ContactRepositoryImpl(database.notifyContactDao())
 
         stateMachine = IncidentStateMachine(incidentRepository, auditRepository)
@@ -282,11 +293,20 @@ class MainActivity : ComponentActivity() {
                     onOpenVerifier = { currentScreen = Screen.VERIFIER },
                     onOpenLegalDraft = { currentScreen = Screen.LEGAL_DRAFTING },
                     onOpenAnchoring = { currentScreen = Screen.ANCHORING },
-                    onOpenDetectionLog = { currentScreen = Screen.DETECTION_LOG }
+                    onOpenDetectionLog = { currentScreen = Screen.DETECTION_LOG },
+                    onOpenSheGuardReport = { currentScreen = Screen.SHEGUARD_REPORTING }
                 )
             }
             Screen.DETECTION_LOG -> {
                 DetectionLogScreen(
+                    onBack = { currentScreen = Screen.HOME }
+                )
+            }
+            Screen.SHEGUARD_REPORTING -> {
+                SheGuardReportingScreen(
+                    repository = microReportRepository,
+                    patternRepository = patternRepository,
+                    alertRepository = alertRepository,
                     onBack = { currentScreen = Screen.HOME }
                 )
             }

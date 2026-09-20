@@ -41,6 +41,7 @@ fun SheGuardReportingScreen(
     alertRepository: org.sahara.core.domain.repository.AlertRepository? = null,
     meshAdapter: SheGuardMeshAdapter? = null,
     anonymousToken: String = UUID.randomUUID().toString().take(12),
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -92,13 +93,34 @@ fun SheGuardReportingScreen(
             .padding(16.dp)
     ) {
         // Header
-        Text(
-            text = "SheGuard Anonymous Safety Report",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "SheGuard Anonymous Safety Report",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
             )
-        )
+            if (onBack != null) {
+                Surface(
+                    color = Color(0xFF334155),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.clickable { onBack() }
+                ) {
+                    Text(
+                        text = "✕ Back",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
         Text(
             text = "Submit a low-friction micro-report. Stored locally offline.",
             style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF94A3B8)),

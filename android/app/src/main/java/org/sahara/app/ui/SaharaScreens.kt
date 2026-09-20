@@ -584,7 +584,8 @@ fun HomeDashboardScreen(
     onOpenVerifier: () -> Unit,
     onOpenLegalDraft: () -> Unit,
     onOpenAnchoring: () -> Unit,
-    onOpenDetectionLog: () -> Unit = {}
+    onOpenDetectionLog: () -> Unit = {},
+    onOpenSheGuardReport: () -> Unit = {}
 ) {
     var selectedNavTab by remember { mutableStateOf("Home") }
 
@@ -670,6 +671,13 @@ fun HomeDashboardScreen(
                 onClick = onStartSafetyWatch
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SaharaPrimaryButton(
+                text = "🛡️ SheGuard Safety Micro-Report",
+                onClick = onOpenSheGuardReport
+            )
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // Compact Status Cards
@@ -704,7 +712,7 @@ fun HomeDashboardScreen(
                     status = "Mesh Relay Ready",
                     icon = "📡",
                     modifier = Modifier.weight(1f),
-                    onClick = {}
+                    onClick = onOpenSheGuardReport
                 )
                 CompactStatusItem(
                     title = "Help Directory",
