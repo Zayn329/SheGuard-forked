@@ -11,18 +11,20 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         MicroReportEntity::class,
         SpatioTemporalPatternEntity::class,
+        RisingPatternAlertEntity::class,
         IncidentEntity::class,
         EvidenceEntryEntity::class,
         DetectionEventEntity::class,
         NotifyContactEntity::class,
         AuditEventEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class SaharaDatabase : RoomDatabase() {
     abstract fun microReportDao(): MicroReportDao
     abstract fun patternDao(): SpatioTemporalPatternDao
+    abstract fun alertDao(): RisingPatternAlertDao
     abstract fun incidentDao(): IncidentDao
     abstract fun evidenceDao(): EvidenceDao
     abstract fun detectionEventDao(): DetectionEventDao
@@ -77,6 +79,37 @@ abstract class SaharaDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `rising_pattern_alerts` (
+                        `alertId` TEXT NOT NULL,
+                        `patternId` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `approximateLocation` TEXT NOT NULL,
+                        `timeWindow` TEXT NOT NULL,
+                        `trustLevel` TEXT NOT NULL,
+                        `trustScore` REAL NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `disclaimer` TEXT NOT NULL,
+                        PRIMARY KEY(`alertId`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE `rising_pattern_alerts` ADD COLUMN `isRelayed` INTEGER NOT NULL DEFAULT 0
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getDatabase(context: Context): SaharaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -84,8 +117,7 @@ abstract class SaharaDatabase : RoomDatabase() {
                     SaharaDatabase::class.java,
                     "sahara_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

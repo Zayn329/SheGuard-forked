@@ -86,3 +86,18 @@ interface AuditEventDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAudit(audit: AuditEventEntity)
 }
+
+@Dao
+interface RisingPatternAlertDao {
+    @Query("SELECT * FROM rising_pattern_alerts WHERE alertId = :id")
+    suspend fun getAlertById(id: String): RisingPatternAlertEntity?
+
+    @Query("SELECT * FROM rising_pattern_alerts ORDER BY createdAt DESC")
+    fun getAllAlerts(): Flow<List<RisingPatternAlertEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAlert(alert: RisingPatternAlertEntity)
+
+    @Query("DELETE FROM rising_pattern_alerts")
+    suspend fun clearAlerts()
+}

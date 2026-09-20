@@ -64,24 +64,33 @@ The critical path prioritized across the milestones is the deterministic pipelin
 
 ---
 
-## Phase 4: Alert — Actionable Rising-Pattern Early Warning
+## Phase 4: Alert — Actionable Rising-Pattern Early Warning [COMPLETED]
 - **Goal:** Build the `RisingPatternAlertEngine` and Jetpack Compose UI card displaying verified rising risk patterns with location, time window, risk context, and non-emergency disclaimers.
 - **Relevant Architecture Components:** `rising_pattern_alert_engine`, `data_models.RisingPatternAlert`.
 - **Protected Modules Touched:** `rising_pattern_alert_engine` [PROTECTED].
+- **Status:** COMPLETED. `RisingPatternAlertEngine.kt`, `TrustLevel` enum, `RisingPatternAlert` model, `AlertEngineConfig`, `RisingPatternAlertEntity`, `RisingPatternAlertDao`, Room `MIGRATION_3_4` (DB v4), `AlertRepository` interface, `AlertRepositoryImpl`, alert card UI in `SheGuardReportingScreen`, 17 unit tests (`RisingPatternAlertEngineTest`), 2 data persistence tests, `bdd/features/sheguard_alert.feature`, `docs/specs/alert.yaml`.
 - **Acceptance Criteria:**
-  - Displays actionable early-warning alerts for emerging patterns that pass trust validation.
-  - Clearly includes the mandatory disclaimer: `"EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."`
+  - [x] Displays actionable early-warning alerts for emerging patterns that pass trust validation.
+  - [x] Clearly includes the mandatory disclaimer: `"EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."`
+  - [x] Alert ID is deterministically derived — idempotent persistence.
+  - [x] Location coarsened to 2 decimal places — no sub-1km precision exposed.
+  - [x] Trust level badge: HIGH (≥0.80) / MEDIUM (0.60–0.79) shown on each alert card.
+  - [x] `fallbackToDestructiveMigration()` removed — all migrations explicit.
 
 ---
 
-## Phase 5: Mesh — BLE / Wi-Fi Direct Peer Communication Capability
-- **Goal:** Adapt existing Nearby Connections mesh relay infrastructure (`NearbyConnectionsMeshRelay`, `MeshDeduplicationCache`) for compact `MicroReport` and `PatternAlert` payloads over BLE / Wi-Fi Direct, including physical Google Play Services Nearby Connections API binding.
+## Phase 5: Mesh — Offline Device-to-Device Relay [COMPLETED]
+- **Goal:** Adapt existing Nearby Connections mesh relay infrastructure (`NearbyConnectionsMeshRelay`, `MeshDeduplicationCache`) for SheGuard alert relay payloads over BLE / Nearby abstractions.
 - **Relevant Architecture Components:** `mesh_relay`, `data_models.MeshPacket`, `technology.android.mesh`.
 - **Protected Modules Touched:** `mesh_relay` [PROTECTED].
+- **Status:** COMPLETED. `SheGuardMeshAdapter.kt`, `SheGuardMeshAlertPayload.kt`, `MeshPayloadValidator.kt`, `MeshPacketType.SHEGUARD_ALERT`, Room `MIGRATION_4_5` (DB v5 `isRelayed`), `SheGuardReportingScreen.kt` mesh indicator & source badging, 23 unit tests (`SheGuardMeshUnitTest.kt`), `bdd/features/sheguard_mesh.feature`, `docs/specs/mesh.yaml`.
 - **Acceptance Criteria:**
-  - Nearby physical devices exchange compact micro-report packets peer-to-peer without Internet connectivity.
-  - Enforces deduplication cache and max hop count (max 12 hops) to prevent relay loops.
-  - Degrades gracefully if no peer devices are discovered, preserving local report creation and local alerting.
+  - [x] Peer devices exchange compact early-warning alert packets peer-to-peer without Internet connectivity.
+  - [x] Enforces deduplication cache and max hop count (max 12 hops) to prevent relay loops.
+  - [x] Degrades gracefully if mesh is unavailable or no peer devices are discovered, preserving local report creation, local pattern detection, and local alerting.
+  - [x] Location coarsening preserved (~1km precision), zero PII or reporter tokens exposed.
+  - [x] Received alerts persisted with `isRelayed = true` and distinct provenance badge.
+  - [x] Receiving an alert never bypasses Phase C trust or generates patterns/alerts from raw volume.
 
 ---
 

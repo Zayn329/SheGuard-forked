@@ -6,7 +6,9 @@ enum class MeshPacketType {
     DISTRESS_ALERT,
     APPROXIMATE_LOCATION,
     EVIDENCE_HASH,
-    DELIVERY_RECEIPT
+    DELIVERY_RECEIPT,
+    /** SheGuard Phase E: rising-pattern early-warning alert relay payload. */
+    SHEGUARD_ALERT
 }
 
 data class MeshPacket(

@@ -1,0 +1,91 @@
+# =============================================================================
+# docs/specs/trust.yaml
+# =============================================================================
+# Specification for SheGuard Trust & Anti-Gaming Evaluation Layer
+# Aligned with architecture.yaml v2.1 and docs/SHEGUARD_PRD.md
+# =============================================================================
+
+version: "1.0"
+
+component:
+  name: "trust_and_anti_gaming_evaluator"
+  location: "android/core/domain/engine/TrustAndAntiGamingEvaluator.kt"
+  package: "org.sahara.core.domain.engine"
+  criticality: "mvp_core"
+
+purpose: >
+  Deterministically evaluates whether detected candidate spatio-temporal risk patterns
+  possess sufficient evidence quality, independence, and spatial-temporal coherence
+  to be elevated to PATTERN_EMERGING, while actively resisting duplicate flooding,
+  burst attacks, and coordinated volume manipulation without external networks or LLMs.
+
+pipeline_position:
+  predecessor: "spatio_temporal_pattern_engine (PATTERN_CANDIDATE)"
+  successor: "rising_pattern_alert_engine (Phase D / ALERT_ACTIVE)"
+  rule: "MicroReport -> Room -> Candidate Detection -> Trust Evaluation -> Pattern Emerging -> Alert Generation"
+
+non_negotiable_invariants:
+  raw_volume_invariant: >
+    Raw report volume alone MUST NOT cause a pattern confidence escalation or trigger
+    an early-warning alert. Trust evaluation requires reporter diversity, temporal
+    independence, and spatial consistency.
+  offline_first_guarantee: >
+    Trust evaluation runs 100% on-device using local candidate patterns and persisted
+    micro-reports. Internet, backend, cloud database, or mesh connectivity is NEVER required.
+  deterministic_execution: >
+    Zero probabilistic, machine learning, or LLM components. Identical input reports
+    yield identical scores and state transitions regardless of input list order or execution time.
+  state_isolation: >
+    Phase C strictly limits transitions to PATTERN_CANDIDATE or PATTERN_EMERGING.
+    Phase C MUST NOT transition to ALERT_ACTIVE or emit rising-pattern alerts.
+
+configuration_parameters:
+  min_unique_reporters_for_emerging: 2
+  min_trust_score_for_emerging: 0.60
+  duplicate_time_window_millis: 300000 # 5 minutes
+  duplicate_distance_meters: 50.0
+  temporal_independence_window_millis: 600000 # 10 minutes
+  flood_window_millis: 600000 # 10 minutes
+  max_burst_reports_per_reporter: 2
+  weights:
+    diversity: 0.40
+    temporal: 0.25
+    spatial: 0.20
+    volume: 0.15 # capped contribution
+  penalties:
+    duplicate_per_report: 0.15
+    flood_burst: 0.20
+
+evaluation_factors:
+  reporter_diversity:
+    description: "Measures the ratio and count of unique anonymous reporter tokens."
+    enforcement: "If uniqueReporterCount < 2, diversity score is strictly capped at 0.15 and pattern cannot become emerging."
+  duplicate_detection:
+    description: "Identifies submissions with matching token, category, time <= 5m, and distance <= 50m (or matching area)."
+    action: "Filtered from valid positive evidence and deducted via duplicate penalty."
+  temporal_independence:
+    description: "Evaluates timestamp span across the 10-minute window."
+    bounds: "Burst reports (< 10 seconds) receive minimal baseline (0.10); distributed reports scale to 1.00."
+  spatial_consistency:
+    description: "Haversine distance check against candidate centroid and bounding radius."
+    missing_location_handling: "Reports with null coordinates are safely assigned neutral 0.50 score without fabrication."
+  rate_and_flood_resistance:
+    description: "Limits burst submissions to 2 per reporter per 10-minute sliding window."
+    action: "Excess reports flagged as flooded and penalized."
+
+state_transitions:
+  initial_state: "PATTERN_CANDIDATE"
+  evaluating_state: "TRUST_EVALUATING"
+  escalation_target: "PATTERN_EMERGING (if trustScore >= 0.60 and uniqueReporters >= 2)"
+  rejection_target: "PATTERN_CANDIDATE (if trust criteria not met)"
+  prohibited_states:
+    - "ALERT_ACTIVE"
+
+privacy_and_anonymity:
+  reporter_tokens: "Anonymous internal ephemeral tokens only; never exposed in UI, alerts, or audit logs."
+  prohibited_identifiers:
+    - "phone_number"
+    - "email"
+    - "hardware_id_or_imei"
+    - "advertising_id"
+    - "exact_continuous_location_history"

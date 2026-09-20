@@ -125,4 +125,120 @@ class SheGuardDataUnitTest {
         val emptyPatterns = repository.getAllPatterns().first()
         assertTrue(emptyPatterns.isEmpty())
     }
+
+    @Test
+    fun testTrustEvaluatedEmergingPatternPersistenceAndRetrieval() = runBlocking {
+        val fakeDao = FakePatternDao()
+        val repository = PatternRepositoryImpl(fakeDao)
+
+        val patternId = UUID.randomUUID()
+        val r1 = UUID.randomUUID()
+        val r2 = UUID.randomUUID()
+
+        val emergingPattern = SpatioTemporalPattern(
+            patternId = patternId,
+            centerLatitude = 19.0760,
+            centerLongitude = 72.8777,
+            radiusMeters = 200.0,
+            category = ReportCategory.HARASSMENT,
+            firstReportedAt = System.currentTimeMillis() - 15 * 60 * 1000L,
+            lastReportedAt = System.currentTimeMillis(),
+            reportCount = 2,
+            contributingReportIds = listOf(r1, r2),
+            trustScore = 0.82f,
+            state = PatternState.PATTERN_EMERGING
+        )
+
+        repository.savePattern(emergingPattern)
+
+        val retrieved = repository.getPatternById(patternId)
+        assertNotNull(retrieved)
+        assertEquals(patternId, retrieved!!.patternId)
+        assertEquals(0.82f, retrieved.trustScore, 0.001f)
+        assertEquals(PatternState.PATTERN_EMERGING, retrieved.state)
+        assertEquals(2, retrieved.contributingReportIds.size)
+    }
+
+    // ─── Phase D: Alert persistence tests ────────────────────────────────────
+
+    private class FakeAlertDao : org.sahara.core.data.db.RisingPatternAlertDao {
+        private val alerts = mutableMapOf<String, org.sahara.core.data.db.RisingPatternAlertEntity>()
+
+        override suspend fun getAlertById(id: String) = alerts[id]
+
+        override fun getAllAlerts(): kotlinx.coroutines.flow.Flow<List<org.sahara.core.data.db.RisingPatternAlertEntity>> =
+            kotlinx.coroutines.flow.flowOf(alerts.values.toList().sortedByDescending { it.createdAt })
+
+        override suspend fun insertAlert(alert: org.sahara.core.data.db.RisingPatternAlertEntity) {
+            alerts[alert.alertId] = alert
+        }
+
+        override suspend fun clearAlerts() {
+            alerts.clear()
+        }
+    }
+
+    @Test
+    fun testAlertPersistenceAndRetrieval() = runBlocking {
+        val fakeDao = FakeAlertDao()
+        val repository = AlertRepositoryImpl(fakeDao)
+
+        val alertId = UUID.randomUUID()
+        val patternId = UUID.randomUUID()
+        val alert = org.sahara.core.domain.models.RisingPatternAlert(
+            alertId = alertId,
+            patternId = patternId,
+            category = ReportCategory.HARASSMENT,
+            approximateLocation = "approx. 19.07°N 72.87°E within ~400m",
+            timeWindow = "18:00–18:30",
+            trustLevel = org.sahara.core.domain.models.TrustLevel.HIGH,
+            trustScore = 0.85f,
+            createdAt = System.currentTimeMillis(),
+            disclaimer = "EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."
+        )
+
+        repository.saveAlert(alert)
+
+        val retrieved = repository.getAlertById(alertId)
+        assertNotNull(retrieved)
+        assertEquals(alertId, retrieved!!.alertId)
+        assertEquals(patternId, retrieved.patternId)
+        assertEquals(ReportCategory.HARASSMENT, retrieved.category)
+        assertEquals(org.sahara.core.domain.models.TrustLevel.HIGH, retrieved.trustLevel)
+        assertEquals(0.85f, retrieved.trustScore, 0.001f)
+        assertEquals(
+            "EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE.",
+            retrieved.disclaimer
+        )
+
+        val all = repository.getAllAlerts().first()
+        assertEquals(1, all.size)
+    }
+
+    @Test
+    fun testAlertClearRemovesAll() = runBlocking {
+        val fakeDao = FakeAlertDao()
+        val repository = AlertRepositoryImpl(fakeDao)
+
+        repeat(3) {
+            repository.saveAlert(
+                org.sahara.core.domain.models.RisingPatternAlert(
+                    alertId = UUID.randomUUID(),
+                    patternId = UUID.randomUUID(),
+                    category = ReportCategory.POOR_LIGHTING,
+                    approximateLocation = "approx. 19.07°N 72.87°E within ~300m",
+                    timeWindow = "20:00–20:10",
+                    trustLevel = org.sahara.core.domain.models.TrustLevel.MEDIUM,
+                    trustScore = 0.70f,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
+        val before = repository.getAllAlerts().first()
+        assertEquals(3, before.size)
+
+        repository.clearAlerts()
+        val after = repository.getAllAlerts().first()
+        assertTrue("clearAlerts must remove all alerts", after.isEmpty())
+    }
 }

@@ -258,3 +258,52 @@ class ContactRepositoryImpl(private val contactDao: NotifyContactDao) : ContactR
         notificationPermission = notificationPermission
     )
 }
+
+class AlertRepositoryImpl(
+    private val alertDao: org.sahara.core.data.db.RisingPatternAlertDao
+) : org.sahara.core.domain.repository.AlertRepository {
+
+    override fun getAllAlerts(): kotlinx.coroutines.flow.Flow<List<org.sahara.core.domain.models.RisingPatternAlert>> {
+        return alertDao.getAllAlerts().map { list -> list.map { it.toDomain() } }
+    }
+
+    override suspend fun saveAlert(alert: org.sahara.core.domain.models.RisingPatternAlert) {
+        alertDao.insertAlert(alert.toEntity())
+    }
+
+    override suspend fun getAlertById(id: UUID): org.sahara.core.domain.models.RisingPatternAlert? {
+        return alertDao.getAlertById(id.toString())?.toDomain()
+    }
+
+    override suspend fun clearAlerts() {
+        alertDao.clearAlerts()
+    }
+
+    private fun org.sahara.core.data.db.RisingPatternAlertEntity.toDomain() =
+        org.sahara.core.domain.models.RisingPatternAlert(
+            alertId = UUID.fromString(alertId),
+            patternId = UUID.fromString(patternId),
+            category = ReportCategory.valueOf(category),
+            approximateLocation = approximateLocation,
+            timeWindow = timeWindow,
+            trustLevel = org.sahara.core.domain.models.TrustLevel.valueOf(trustLevel),
+            trustScore = trustScore,
+            createdAt = createdAt,
+            disclaimer = disclaimer,
+            isRelayed = isRelayed
+        )
+
+    private fun org.sahara.core.domain.models.RisingPatternAlert.toEntity() =
+        org.sahara.core.data.db.RisingPatternAlertEntity(
+            alertId = alertId.toString(),
+            patternId = patternId.toString(),
+            category = category.name,
+            approximateLocation = approximateLocation,
+            timeWindow = timeWindow,
+            trustLevel = trustLevel.name,
+            trustScore = trustScore,
+            createdAt = createdAt,
+            disclaimer = disclaimer,
+            isRelayed = isRelayed
+        )
+}

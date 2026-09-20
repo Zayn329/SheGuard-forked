@@ -1,0 +1,173 @@
+---
+# SheGuard Phase D — Rising Pattern Alert Engine Specification
+# Authority: architecture.yaml > docs/SHEGUARD_PRD.md > this file
+# Created: Phase D implementation
+
+spec_id: SHEGUARD-ALERT-D
+version: "1.0"
+phase: D
+pipeline_position: 4  # REPORT(1) → DETECT(2) → TRUST(3) → ALERT(4)
+
+purpose: >
+  The Rising Pattern Alert Engine consumes trust-evaluated PATTERN_EMERGING patterns
+  and produces actionable early-warning RisingPatternAlert objects.
+  Alerts are deterministic, on-device, and privacy-preserving.
+
+non_negotiable_rules:
+  - id: RULE-D1
+    description: >
+      The alert engine MUST NOT accept raw report count as sufficient evidence.
+      Trust evaluation (Phase C) is the prerequisite gate for alert generation.
+    enforcement: state gate — only PATTERN_EMERGING patterns enter the alert engine
+
+  - id: RULE-D2
+    description: >
+      The alert engine MUST NOT duplicate or recreate TrustAndAntiGamingEvaluator logic.
+      It uses the trustScore already set on the SpatioTemporalPattern.
+    enforcement: engine reads pattern.trustScore directly; no evaluator is instantiated
+
+  - id: RULE-D3
+    description: >
+      Alert ID MUST be deterministically derived from pattern ID.
+      UUID.nameUUIDFromBytes("alert_{patternId}".toByteArray()) is the canonical derivation.
+    enforcement: same pattern always yields same alertId (idempotent persistence)
+
+  - id: RULE-D4
+    description: >
+      approximateLocation MUST use coarse centroid only.
+      Latitude/longitude truncated to 2 decimal places (~1 km resolution at equator).
+      Radius rounded to nearest 100 m by default.
+    enforcement: never expose sub-100m precision in alert output
+
+  - id: RULE-D5
+    description: >
+      The disclaimer field value is fixed and MUST NOT be modified.
+      Value: "EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."
+    enforcement: hardcoded companion constant; not a config value
+
+  - id: RULE-D6
+    description: >
+      No network call, no LLM, no external service may participate in alert generation.
+    enforcement: RisingPatternAlertEngine is pure Kotlin with no IO dependencies
+
+  - id: RULE-D7
+    description: >
+      Alert generation MUST return null (not throw) for any non-PATTERN_EMERGING pattern.
+    enforcement: state check returns null; caller handles missing alert gracefully
+
+alert_model:
+  name: RisingPatternAlert
+  canonical_source: architecture.yaml
+  fields:
+    alert_id:
+      type: UUID
+      derivation: "UUID.nameUUIDFromBytes(\"alert_{pattern_id}\".toByteArray())"
+      notes: deterministic — same pattern always yields same alertId
+    pattern_id:
+      type: UUID
+      notes: references the SpatioTemporalPattern that triggered this alert
+    category:
+      type: ReportCategory enum
+      values: [POOR_LIGHTING, HARASSMENT, FEELING_FOLLOWED, UNSAFE_GATHERING, SUSPICIOUS_ACTIVITY]
+    approximate_location:
+      type: string
+      format: "approx. {lat_2dp}°N {lng_2dp}°E within ~{radius_rounded}m"
+      privacy: coordinates truncated to 2 decimal places; radius rounded to 100m granularity
+    time_window:
+      type: string
+      format: "HH:mm–HH:mm"
+      notes: derived from pattern.firstReportedAt and pattern.lastReportedAt
+    trust_level:
+      type: TrustLevel enum
+      values:
+        LOW: "trustScore < 0.60 (never reaches alert stage — filtered by trust gate)"
+        MEDIUM: "0.60 ≤ trustScore < 0.80"
+        HIGH: "trustScore ≥ 0.80"
+    trust_score:
+      type: Float
+      notes: copied from pattern.trustScore; range [0.60, 1.00] for emitted alerts
+    created_at:
+      type: Long (epoch ms)
+    disclaimer:
+      type: string
+      value: "EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."
+      notes: fixed — must not be configurable
+
+engine_config:
+  name: AlertEngineConfig
+  fields:
+    min_trust_score_for_alert:
+      default: 0.60
+      notes: matches TrustLevel.MEDIUM lower bound
+    location_radius_granularity_meters:
+      default: 100.0
+      notes: radius rounded to nearest multiple of this value
+
+persistence:
+  entity: RisingPatternAlertEntity
+  table: rising_pattern_alerts
+  primary_key: alertId (TEXT NOT NULL)
+  dao: RisingPatternAlertDao
+  operations: [getAlertById, getAllAlerts (Flow), insertAlert (REPLACE), clearAlerts]
+  migration: MIGRATION_3_4 — CREATE TABLE IF NOT EXISTS rising_pattern_alerts
+  isolation: separate table from micro_reports and spatio_temporal_patterns
+
+pipeline_gates:
+  state_gate:
+    condition: "pattern.state == PatternState.PATTERN_EMERGING"
+    reject_action: return null
+  trust_score_gate:
+    condition: "pattern.trustScore >= config.minTrustScoreForAlert"
+    purpose: guard against config-drift edge cases with stale persisted patterns
+    reject_action: return null
+
+repository_interface:
+  name: AlertRepository
+  methods:
+    - getAllAlerts(): Flow<List<RisingPatternAlert>>
+    - saveAlert(alert: RisingPatternAlert)
+    - getAlertById(id: UUID): RisingPatternAlert?
+    - clearAlerts()
+
+ui_requirements:
+  - Alert cards appear BEFORE trust/detect stage banners (pipeline order: ALERT → TRUST → DETECT)
+  - Trust level shown as a badge: HIGH (deep red), MEDIUM (deep amber), LOW (blue)
+  - Approximate location displayed with 📍 icon
+  - Time window and trust score displayed on same line
+  - Fixed disclaimer shown in muted text below each alert card
+  - Alert card must NOT contain wording implying police response, guaranteed intervention,
+    or guaranteed crime prevention
+  - Accessibility: all interactive areas have content descriptions
+
+traceability:
+  bdd_feature: bdd/features/sheguard_alert.feature
+  unit_tests: android/core/domain/src/test/java/org/sahara/core/domain/engine/RisingPatternAlertEngineTest.kt
+  data_tests: android/core/data/src/test/java/org/sahara/core/data/repository/SheGuardDataUnitTest.kt
+  architecture: architecture.yaml (rising_pattern_alert_engine section)
+  prd: docs/SHEGUARD_PRD.md (Phase D / Alert section)
+  phase_c_spec: docs/specs/trust.yaml
+
+decisions:
+  - decision: Alert engine does not set PatternState.ALERT_ACTIVE
+    rationale: >
+      ALERT_ACTIVE is a future state transition for the pattern state machine.
+      The alert engine produces a separate RisingPatternAlert object.
+      Conflating the two would require the alert engine to mutate patterns,
+      violating single-responsibility and making the pipeline harder to reason about.
+    status: accepted
+
+  - decision: AlertRepositoryImpl uses fully qualified names to avoid import conflicts
+    rationale: >
+      RepositoriesImpl.kt contains many repository implementations. Using FQNs for
+      the new alert types avoids any potential naming collision with Sahara legacy types
+      and keeps the implementation change minimal and auditable.
+    status: accepted
+
+limitations:
+  - Alert cards in the current implementation are derived in-memory from evaluatedPatterns.
+    Persistence via alertRepository is triggered on each submit. This is appropriate for
+    the hackathon MVP. A production implementation would use a background coroutine or
+    WorkManager to decouple alert generation from the UI submit flow.
+  - fallbackToDestructiveMigration() has been REMOVED from SaharaDatabase. All migrations
+    (1→2, 2→3, 3→4) are explicit. If a device has a DB version not covered by the chain,
+    Room will throw an exception. This is intentional — data preservation is required.

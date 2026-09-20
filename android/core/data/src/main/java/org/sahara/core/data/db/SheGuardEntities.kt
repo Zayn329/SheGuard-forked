@@ -30,3 +30,17 @@ data class SpatioTemporalPatternEntity(
     val trustScore: Float,
     val state: String
 )
+
+@Entity(tableName = "rising_pattern_alerts")
+data class RisingPatternAlertEntity(
+    @PrimaryKey val alertId: String,
+    val patternId: String,
+    val category: String,
+    val approximateLocation: String,
+    val timeWindow: String,
+    val trustLevel: String,
+    val trustScore: Float,
+    val createdAt: Long,
+    val disclaimer: String,
+    val isRelayed: Boolean = false
+)

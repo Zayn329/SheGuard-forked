@@ -8,6 +8,7 @@ import org.sahara.core.domain.models.Incident
 import org.sahara.core.domain.models.IncidentState
 import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.NotifyContact
+import org.sahara.core.domain.models.RisingPatternAlert
 import org.sahara.core.domain.models.SpatioTemporalPattern
 import java.util.UUID
 
@@ -45,4 +46,11 @@ interface ContactRepository {
     fun getContacts(): Flow<List<NotifyContact>>
     suspend fun saveContact(contact: NotifyContact)
     suspend fun deleteContact(id: UUID)
+}
+
+interface AlertRepository {
+    fun getAllAlerts(): Flow<List<RisingPatternAlert>>
+    suspend fun saveAlert(alert: RisingPatternAlert)
+    suspend fun getAlertById(id: UUID): RisingPatternAlert?
+    suspend fun clearAlerts()
 }

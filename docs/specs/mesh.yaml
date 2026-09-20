@@ -1,0 +1,136 @@
+---
+# SheGuard Phase E — Offline Device-to-Device Mesh Relay Specification
+# Authority: architecture.yaml > docs/SHEGUARD_PRD.md > this file
+# Created: Phase E implementation
+
+spec_id: SHEGUARD-MESH-E
+version: "1.0"
+phase: E
+pipeline_position: 5  # REPORT(1) -> DETECT(2) -> TRUST(3) -> ALERT(4) -> MESH(5)
+
+purpose: >
+  The Mesh Relay layer enables disconnected nearby devices to exchange verified
+  rising-pattern early-warning alerts peer-to-peer over BLE / Wi-Fi Direct using
+  Google Nearby Connections abstractions with store-and-forward semantics.
+
+architectural_hierarchy:
+  tier_1_local: Fundamental guarantee (Report -> Detect -> Trust -> Alert operates on-device)
+  tier_2_mesh: Core MVP communication capability (enhances context between nearby peers)
+  tier_3_backend: Optional asynchronous sync when Internet connectivity returns
+
+non_negotiable_rules:
+  - id: RULE-E1
+    description: >
+      Offline-first does NOT mean mesh-dependent. If mesh is unavailable or
+      no peers are found, SheGuard MUST continue to report, detect, trust, and
+      generate alerts locally without error.
+    enforcement: local pipeline executes completely before and independently of mesh
+
+  - id: RULE-E2
+    description: >
+      Mesh MUST NOT bypass the Trust layer. A received mesh alert is an already-generated
+      alert from a peer. It must never be used to increase report counts, fabricate
+      pattern candidates, or bypass Phase C trust evaluation.
+    enforcement: adapter persists directly as a community alert with isRelayed = true;
+      received alerts never feed back into SpatioTemporalPatternEngine.
+
+  - id: RULE-E3
+    description: >
+      Mesh payloads MUST preserve location coarsening and exclude all PII.
+      Reporter tokens, phone numbers, names, hardware IDs, and raw GPS coordinates
+      must never be present in serialized mesh payloads.
+    enforcement: SheGuardMeshAlertPayload carries only approximateLocation (~1km coarse string)
+
+  - id: RULE-E4
+    description: >
+      Mesh deduplication MUST be idempotent. Receiving the same message multiple
+      times or via different relay paths must result in exactly one logical alert.
+    enforcement: MeshDeduplicationCache + PrimaryKey(alertId) in Room database
+
+  - id: RULE-E5
+    description: >
+      Hop count limits and loop prevention MUST prevent indefinite circulation.
+    enforcement: maxHops = 12 default; hopCount incremented per relay; seen packets dropped
+
+  - id: RULE-E6
+    description: >
+      Validation MUST be deterministic and fail-safe. Malformed or tampered payloads
+      must be rejected without crashing the application.
+    enforcement: MeshPayloadValidator validates schema, UUIDs, enums, timestamps, and score range
+
+payload_schema:
+  model_name: SheGuardMeshAlertPayload
+  format: JSON
+  max_size_bytes: 4096
+  fields:
+    protocolVersion:
+      type: integer
+      expected: 1
+    messageId:
+      type: string (UUID)
+      notes: matches alertId for deduplication
+    messageType:
+      type: string
+      value: "SHEGUARD_ALERT"
+    alertId:
+      type: string (UUID)
+    patternId:
+      type: string (UUID)
+    category:
+      type: string (ReportCategory.name)
+    approximateLocation:
+      type: string
+      notes: coarse location only (e.g. "approx. 19.08°N 72.88°E within ~200m")
+    patternStartTime:
+      type: long (epoch ms)
+    patternEndTime:
+      type: long (epoch ms)
+    generatedAt:
+      type: long (epoch ms)
+    trustLevel:
+      type: string (TrustLevel.name)
+    trustScore:
+      type: float [0.0, 1.0]
+    contributingReportCount:
+      type: integer (>= 1)
+    disclaimer:
+      type: string
+      value: "EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."
+
+packet_envelope:
+  model_name: MeshPacket
+  fields:
+    packetId: string (UUID)
+    incidentId: string (UUID)
+    packetType: MeshPacketType.SHEGUARD_ALERT
+    createdAt: long
+    hopCount: integer (initial: 0)
+    maxHops: integer (default: 12)
+    senderIntegrityMetadata: string
+    payloadHash: string (SHA-256)
+    payloadText: string (JSON serialized SheGuardMeshAlertPayload)
+
+store_and_forward:
+  offline_behavior: >
+    When mesh is unavailable (no peers, Bluetooth off, disconnected), generated
+    alerts remain fully accessible locally and are placed in an in-memory outboundQueue.
+  drain_behavior: >
+    When mesh connectivity becomes available, drainOutboundQueue() automatically
+    attempts delivery through the relay.
+
+transport_limitations:
+  implementation_state: >
+    The repository's NearbyConnectionsMeshRelay is an in-memory deterministic
+    relay and deduplication pipeline. It models hop limits, TTL eviction, and
+    deduplication accurately for unit tests and local simulation.
+  physical_ble_binding: >
+    Physical Google Play Services Nearby Connections API binding (BLE advertising/discovery)
+    requires physical Android hardware with Google Play Services enabled. The protocol
+    and adapter logic are verified via automated deterministic unit tests.
+
+persistence:
+  database_version: 5
+  table: rising_pattern_alerts
+  new_column: isRelayed (INTEGER NOT NULL DEFAULT 0)
+  migration: MIGRATION_4_5 (non-destructive ALTER TABLE)
+  distinction: alerts with isRelayed = true are displayed with "Received via nearby device" badge
