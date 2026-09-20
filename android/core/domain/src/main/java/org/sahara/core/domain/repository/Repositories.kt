@@ -6,8 +6,23 @@ import org.sahara.core.domain.models.DetectionEvent
 import org.sahara.core.domain.models.EvidenceEntry
 import org.sahara.core.domain.models.Incident
 import org.sahara.core.domain.models.IncidentState
+import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.NotifyContact
+import org.sahara.core.domain.models.SpatioTemporalPattern
 import java.util.UUID
+
+interface MicroReportRepository {
+    suspend fun saveReport(report: MicroReport)
+    fun getAllReports(): Flow<List<MicroReport>>
+    suspend fun getReportById(id: UUID): MicroReport?
+}
+
+interface PatternRepository {
+    suspend fun savePattern(pattern: SpatioTemporalPattern)
+    fun getAllPatterns(): Flow<List<SpatioTemporalPattern>>
+    suspend fun getPatternById(id: UUID): SpatioTemporalPattern?
+    suspend fun clearPatterns()
+}
 
 interface IncidentRepository {
     suspend fun getIncidentById(id: UUID): Incident?
