@@ -15,3 +15,18 @@ data class MicroReportEntity(
     val contextDescription: String?,
     val syncStatus: String
 )
+
+@Entity(tableName = "spatio_temporal_patterns")
+data class SpatioTemporalPatternEntity(
+    @PrimaryKey val patternId: String,
+    val centerLatitude: Double,
+    val centerLongitude: Double,
+    val radiusMeters: Double,
+    val category: String,
+    val firstReportedAt: Long,
+    val lastReportedAt: Long,
+    val reportCount: Int,
+    val contributingReportIdsJson: String,
+    val trustScore: Float,
+    val state: String
+)

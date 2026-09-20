@@ -16,10 +16,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import org.sahara.core.domain.engine.SpatioTemporalPatternEngine
 import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.ReportCategory
+import org.sahara.core.domain.models.SpatioTemporalPattern
 import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.repository.MicroReportRepository
+import org.sahara.core.domain.repository.PatternRepository
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -27,6 +30,7 @@ import java.util.*
 @Composable
 fun SheGuardReportingScreen(
     repository: MicroReportRepository,
+    patternRepository: PatternRepository? = null,
     anonymousToken: String = UUID.randomUUID().toString().take(12),
     modifier: Modifier = Modifier
 ) {
@@ -38,6 +42,10 @@ fun SheGuardReportingScreen(
     var isSubmitting by remember { mutableStateOf(false) }
 
     val reportsState by repository.getAllReports().collectAsState(initial = emptyList())
+    val patternEngine = remember { SpatioTemporalPatternEngine() }
+    val candidatePatterns = remember(reportsState) {
+        patternEngine.detectCandidatePatterns(reportsState)
+    }
 
     Column(
         modifier = modifier
@@ -56,7 +64,7 @@ fun SheGuardReportingScreen(
         Text(
             text = "Submit a low-friction micro-report. Stored locally offline.",
             style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF94A3B8)),
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(bottom = 12.dp)
         )
 
         // Confirmation Banner
@@ -118,7 +126,7 @@ fun SheGuardReportingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Context Description
         OutlinedTextField(
@@ -126,16 +134,18 @@ fun SheGuardReportingScreen(
             onValueChange = { contextText = it },
             label = { Text("Optional Context / Details", color = Color(0xFF94A3B8)) },
             modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.outlinedTextFieldColors(
-                focusedBorderColor = Color(0xFF38BDF8),
-                unfocusedBorderColor = Color(0xFF334155),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFF1E293B),
+                unfocusedContainerColor = Color(0xFF1E293B),
+                focusedIndicatorColor = Color(0xFF38BDF8),
+                unfocusedIndicatorColor = Color(0xFF334155),
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
             maxLines = 2
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Submit Button
         Button(
@@ -152,6 +162,15 @@ fun SheGuardReportingScreen(
                         syncStatus = SyncStatus.LOCAL
                     )
                     repository.saveReport(report)
+
+                    // Re-run pattern engine and persist candidate patterns
+                    val updatedReports = reportsState + report
+                    val detected = patternEngine.detectCandidatePatterns(updatedReports)
+                    patternRepository?.let { repo ->
+                        repo.clearPatterns()
+                        detected.forEach { repo.savePattern(it) }
+                    }
+
                     contextText = ""
                     isSubmitting = false
                     showConfirmation = true
@@ -160,7 +179,7 @@ fun SheGuardReportingScreen(
             enabled = !isSubmitting,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(44.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -171,7 +190,35 @@ fun SheGuardReportingScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // DETECT STAGE: Detected Candidate Patterns Banner
+        if (candidatePatterns.isNotEmpty()) {
+            Surface(
+                color = Color(0xFF854D0E), // Amber background for candidate detection
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "🔍 DETECT STAGE: ${candidatePatterns.size} Candidate Pattern(s) Identified",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                    candidatePatterns.forEach { pattern ->
+                        Text(
+                            text = "• Candidate [${pattern.category.name.replace("_", " ")}]: ${pattern.reportCount} reports in area (${String.format("%.1f", pattern.radiusMeters)}m radius) [State: ${pattern.state}]",
+                            color = Color(0xFFFEF08A),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
+        }
 
         // Local Reports History
         Text(
@@ -180,7 +227,7 @@ fun SheGuardReportingScreen(
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             ),
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 6.dp)
         )
 
         if (reportsState.isEmpty()) {
@@ -190,14 +237,14 @@ fun SheGuardReportingScreen(
                 fontSize = 13.sp
             )
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(reportsState) { report ->
                     Surface(
                         color = Color(0xFF1E293B),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(8.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -206,7 +253,7 @@ fun SheGuardReportingScreen(
                                     text = report.category.name.replace("_", " "),
                                     color = Color(0xFF38BDF8),
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    fontSize = 12.sp
                                 )
                                 Text(
                                     text = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(report.timestamp)),
@@ -218,15 +265,15 @@ fun SheGuardReportingScreen(
                                 Text(
                                     text = report.contextDescription!!,
                                     color = Color.White,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
                             Text(
                                 text = "Status: ${report.syncStatus} | Token: ${report.anonymousReporterToken.take(8)}...",
                                 color = Color(0xFF64748B),
                                 fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 4.dp)
+                                modifier = Modifier.padding(top = 2.dp)
                             )
                         }
                     }

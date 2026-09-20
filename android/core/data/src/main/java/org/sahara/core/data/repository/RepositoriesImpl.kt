@@ -12,6 +12,8 @@ import org.sahara.core.data.db.MicroReportDao
 import org.sahara.core.data.db.MicroReportEntity
 import org.sahara.core.data.db.NotifyContactDao
 import org.sahara.core.data.db.NotifyContactEntity
+import org.sahara.core.data.db.SpatioTemporalPatternDao
+import org.sahara.core.data.db.SpatioTemporalPatternEntity
 import org.sahara.core.domain.models.AuditEvent
 import org.sahara.core.domain.models.AuditResult
 import org.sahara.core.domain.models.ContactType
@@ -21,14 +23,67 @@ import org.sahara.core.domain.models.Incident
 import org.sahara.core.domain.models.IncidentState
 import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.NotifyContact
+import org.sahara.core.domain.models.PatternState
 import org.sahara.core.domain.models.ReportCategory
+import org.sahara.core.domain.models.SpatioTemporalPattern
 import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.repository.AuditRepository
 import org.sahara.core.domain.repository.ContactRepository
 import org.sahara.core.domain.repository.EvidenceRepository
 import org.sahara.core.domain.repository.IncidentRepository
 import org.sahara.core.domain.repository.MicroReportRepository
+import org.sahara.core.domain.repository.PatternRepository
 import java.util.UUID
+
+class PatternRepositoryImpl(private val patternDao: SpatioTemporalPatternDao) : PatternRepository {
+    override suspend fun savePattern(pattern: SpatioTemporalPattern) {
+        patternDao.insertPattern(pattern.toEntity())
+    }
+
+    override fun getAllPatterns(): Flow<List<SpatioTemporalPattern>> {
+        return patternDao.getAllPatterns().map { list -> list.map { it.toDomain() } }
+    }
+
+    override suspend fun getPatternById(id: UUID): SpatioTemporalPattern? {
+        return patternDao.getPatternById(id.toString())?.toDomain()
+    }
+
+    override suspend fun clearPatterns() {
+        patternDao.clearPatterns()
+    }
+
+    private fun SpatioTemporalPatternEntity.toDomain() = SpatioTemporalPattern(
+        patternId = UUID.fromString(patternId),
+        centerLatitude = centerLatitude,
+        centerLongitude = centerLongitude,
+        radiusMeters = radiusMeters,
+        category = ReportCategory.valueOf(category),
+        firstReportedAt = firstReportedAt,
+        lastReportedAt = lastReportedAt,
+        reportCount = reportCount,
+        contributingReportIds = contributingReportIdsJson.removeSurrounding("[", "]")
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { UUID.fromString(it) },
+        trustScore = trustScore,
+        state = PatternState.valueOf(state)
+    )
+
+    private fun SpatioTemporalPattern.toEntity() = SpatioTemporalPatternEntity(
+        patternId = patternId.toString(),
+        centerLatitude = centerLatitude,
+        centerLongitude = centerLongitude,
+        radiusMeters = radiusMeters,
+        category = category.name,
+        firstReportedAt = firstReportedAt,
+        lastReportedAt = lastReportedAt,
+        reportCount = reportCount,
+        contributingReportIdsJson = "[${contributingReportIds.joinToString(",")}]",
+        trustScore = trustScore,
+        state = state.name
+    )
+}
 
 class MicroReportRepositoryImpl(private val microReportDao: MicroReportDao) : MicroReportRepository {
     override suspend fun saveReport(report: MicroReport) {
