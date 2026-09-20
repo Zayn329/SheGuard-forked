@@ -2,11 +2,17 @@ AGENTS.md
 
 Project Governance
 
-This repository implements an offline-first Android personal safety companion. The project includes deterministic on-device distress detection, panic activation, encrypted evidence capture, cryptographic integrity protection, local persistence, nearby mesh relay, Notify Circle delivery, and optional backend-assisted legal and integrity workflows.
+- Product / Project Name: SheGuard
+- Team Name: Aegis
+- Problem Statement Identifier: CX1001
+- Domain / Theme: Women Safety & Social Impact — Preventive & Community Safety
+- Canonical Product Contract: "docs/SHEGUARD_PRD.md"
+
+SheGuard is an offline-first intelligent safety system that converts low-friction, anonymous micro-reports into verified spatio-temporal risk patterns and actionable community-level early warnings using local operation and BLE / Wi-Fi Direct mesh relay without relying on cloud connectivity or LLMs.
 
 This file defines how coding agents must work in this repository. It does not replace the technical architecture.
 
-"architecture.yaml" is the highest technical authority in this repository and must remain unchanged unless the user explicitly approves an architectural modification.
+"architecture.yaml" is the highest technical authority in this repository and must remain unchanged unless the user explicitly approves an architectural modification. "docs/SHEGUARD_PRD.md" is the authoritative product contract for SheGuard. "Sahara" represents legacy repository context; existing Sahara infrastructure may be reused where technically appropriate, but legacy Sahara product requirements are not automatically SheGuard requirements.
 
 The repository should remain agent-legible. Important decisions, contracts, specifications, and limitations must exist in versioned repository files rather than only in conversation context.
 
@@ -16,12 +22,13 @@ When implementing or modifying code, follow this order:
 
 1. Direct system, developer, and user instructions.
 2. The repository's "architecture.yaml".
-3. More specific referenced specifications under "specs/".
-4. Applicable nested "AGENTS.md" files.
-5. Existing stable implementation conventions.
-6. This file.
+3. The repository's "docs/SHEGUARD_PRD.md".
+4. More specific referenced specifications under "docs/specs/".
+5. Applicable nested "AGENTS.md" files.
+6. Existing stable implementation conventions.
+7. This file.
 
-If "architecture.yaml", a specification, BDD scenario, or existing implementation conflicts with another source, do not silently choose one. Stop and clearly report the conflict.
+If "architecture.yaml", "docs/SHEGUARD_PRD.md", a specification, BDD scenario, or existing implementation conflicts with another source, do not silently choose one. Stop and clearly report the conflict.
 
 Do not modify "architecture.yaml" silently. You may propose an architectural change, explain why it is necessary, and wait for approval.
 
@@ -44,12 +51,13 @@ Mandatory Startup Procedure
 Before implementing any task:
 
 1. Read "architecture.yaml".
-2. Read every specification directly relevant to the requested task.
-3. Check for nested "AGENTS.md" files affecting the files you may modify.
-4. Inspect the relevant existing implementation and tests.
-5. Identify whether the task touches a protected module.
-6. Create or update the short task plan or progress record.
-7. Implement only after the above context is understood.
+2. Read "docs/SHEGUARD_PRD.md".
+3. Read every specification directly relevant to the requested task under "docs/specs/".
+4. Check for nested "AGENTS.md" files affecting the files you may modify.
+5. Inspect the relevant existing implementation and tests.
+6. Identify whether the task touches a protected module.
+7. Create or update the short task plan or progress record.
+8. Implement only after the above context is understood.
 
 Use the following execution cycle:
 
@@ -91,21 +99,75 @@ New dependencies may be introduced only when justified and when they:
 
 Record the reason for every meaningful new dependency.
 
+SheGuard Core MVP & Pipeline Rules
+
+The primary hackathon MVP pipeline is:
+
+"Report -> Detect -> Trust -> Alert"
+
+1. REPORT: Low-friction, anonymous safety micro-report (hazard category, approximate location, timestamp, local Room persistence & queueing, offline capable).
+2. DETECT: Deterministic spatio-temporal grouping (spatial proximity, temporal windows, recurring/emerging safety patterns).
+3. TRUST: Multi-signal evaluation (reporter diversity, temporal independence, spatial consistency, duplicate filtering, rate limiting / anti-flooding).
+4. ALERT: Actionable rising-pattern early warning (location/time/risk context; explicitly NOT a guaranteed emergency response).
+
+Non-Negotiable Anti-Gaming Rule
+
+Raw report volume alone MUST NOT determine pattern confidence, cause pattern escalation, or trigger an early-warning alert. Trust evaluation requires reporter diversity, temporal independence, spatial consistency, and duplicate/anti-flooding verification as defined by "architecture.yaml".
+
+Offline-First and Mesh Communication Hierarchy
+
+"Offline-first" means SheGuard is capable of creating, persisting, processing, evaluating trust, and generating local early-warning alerts without Internet or backend connectivity.
+
+The operational hierarchy is:
+
+1. LOCAL OPERATION — Fundamental Guarantee:
+   - A user can create an anonymous micro-report offline.
+   - Micro-reports are persisted locally in Room storage.
+   - Spatio-temporal pattern detection and trust evaluation run deterministically on-device.
+   - Local rising-pattern early warnings generate directly without backend or peer access.
+   - Failure of external networks, backends, or peer devices MUST NOT break local operation.
+
+2. MESH COMMUNICATION — Core MVP Capability:
+   - BLE / Wi-Fi Direct peer-to-peer relay allows nearby participating devices to exchange compact micro-reports and pattern signals without Internet.
+   - Mesh enables nearby disconnected devices to contribute to a shared local safety picture using store-and-forward semantics.
+   - Mesh operates alongside local persistence. Mesh failure or absence of nearby peer devices MUST NOT break local report creation, local persistence, local pattern detection, or local early-warning alerting.
+
+3. BACKEND SYNCHRONIZATION — Optional Supporting Capability:
+   - Queued metadata and pattern signals synchronize asynchronously with the backend when Internet connectivity returns.
+
+Infrastructure Reuse Rule
+
+Before creating new infrastructure, inspect existing reusable implementation in the repository.
+
+Prefer adapting and reusing existing:
+- Room database and local storage entities;
+- Google Nearby Connections BLE / Wi-Fi Direct mesh relay modules;
+- FastAPI backend framework and provider abstractions;
+- Cryptographic primitives (AES-256-GCM, SHA-256, Android Keystore);
+- Existing event and policy enforcement structures.
+
+Do not duplicate infrastructure merely because its original implementation was created for Sahara. If an existing module's contract or implementation is incompatible with SheGuard, document the incompatibility and make the smallest architecturally compliant change.
+
 Protected Modules
 
 The following areas require additional care:
 
-- distress detection;
-- incident state machine;
-- panic activation;
+SheGuard Core MVP Protected Modules:
+- micro_reporter;
+- spatio_temporal_pattern_engine;
+- trust_and_anti_gaming_evaluator;
+- rising_pattern_alert_engine;
+- mesh_relay (Google Nearby Connections / BLE / Wi-Fi Direct).
+
+Supporting & Security Protected Modules:
 - evidence encryption;
 - Android Keystore integration;
 - evidence signing and hashing;
 - Merkle tree logic;
 - SMS escalation;
-- mesh relay.
+- distress detection & panic controllers (legacy supporting).
 
-Before modifying a protected module, read its complete relevant specification and existing implementation.
+Before modifying a protected module, read its complete relevant specification, PRD section, and existing implementation.
 
 For every protected-module change:
 
@@ -126,12 +188,12 @@ The following are prohibited:
 
 - hardcoded secrets or cryptographic keys;
 - fake cryptography presented as real cryptography;
-- plaintext evidence storage;
+- plaintext evidence or report storage;
 - plaintext persistence of incident encryption keys;
 - silent replacement of real security mechanisms with mocks;
 - reuse of AES-GCM nonces;
-- logging private keys, authentication tokens, encryption keys, raw evidence, exact location, or phone numbers;
-- silently uploading raw evidence;
+- logging private keys, authentication tokens, encryption keys, raw evidence, exact location history, or phone numbers;
+- silently uploading raw evidence or unredacted reports;
 - silently disabling cryptographic verification;
 - silently disabling tests;
 - temporarily disabling failing tests to claim completion.
@@ -170,7 +232,7 @@ Required Environment Variables
 
 Only environment variables required for the current task block implementation.
 
-For example, missing LLM credentials must not block offline Android detection work.
+For example, missing LLM credentials must not block offline Android reporting or pattern detection work.
 
 However, if the current task requires integration with a real LLM provider, SMS gateway, backend, blockchain RPC, or other configured external service and its required environment variable is missing, stop and ask for the required configuration.
 
@@ -185,7 +247,7 @@ Before implementing or materially changing platform-sensitive or security-sensit
 This requirement applies particularly to:
 
 - Android foreground services;
-- Android microphone and background execution restrictions;
+- Android background execution restrictions;
 - Android location permissions;
 - Android Keystore;
 - Android cryptographic APIs;
@@ -211,88 +273,56 @@ The minimum supported Android API should remain aligned with the repository arch
 
 Prefer real physical-device behavior for:
 
+- Nearby Connections;
+- Bluetooth-related discovery;
 - microphone capture;
 - accelerometer behavior;
-- SMS delivery;
-- Nearby Connections;
-- Bluetooth-related discovery.
+- SMS delivery.
 
 Emulator behavior may be used for development and testing but must be clearly identified when it differs from physical-device behavior.
 
-Android platform restrictions must be respected. Do not claim that background microphone monitoring, foreground services, sensor access, or notification behavior can be guaranteed beyond what Android permits.
+Android platform restrictions must be respected. Do not claim that background monitoring, foreground services, sensor access, or notification behavior can be guaranteed beyond what Android permits.
 
 When the platform prevents a requested guarantee, implement the closest compliant behavior and document the limitation.
 
-Detection and Safety Path Rules
+Deterministic Pipeline Rules
 
-The distress detection path must remain deterministic and on-device.
+The core SheGuard MVP pipeline must remain deterministic and on-device.
 
-No LLM or generative AI may participate in:
+No LLM, generative AI, or agent component may participate in:
 
-- keyword detection;
-- scream detection;
-- motion analysis;
-- signal fusion;
-- incident activation;
-- panic activation;
-- evidence capture;
-- evidence sealing;
+- micro-report validation;
+- spatio-temporal pattern detection;
+- trust evaluation;
+- anti-gaming evaluation;
+- rising-pattern early-warning alert generation;
+- mesh forwarding decisions;
+- evidence capture or sealing;
 - emergency escalation decisions.
 
-The backend must not become a dependency of the core safety path.
-
-The default and configurable signal rules defined in "architecture.yaml" must be respected.
-
-Do not silently modify thresholds, confirmation semantics, trigger combinations, or incident-state transitions.
-
-Signal detection may be simplified where explicitly permitted for the hackathon, but the simplified behavior must remain real and must not be represented as functionality that does not exist.
+The backend must not become a dependency of the core local safety/reporting path.
 
 Core Demonstration Requirements
 
-The following capabilities are core to the hackathon demonstration and must be genuinely implemented rather than silently mocked:
+The following capabilities are core to the SheGuard hackathon demonstration and must be genuinely implemented rather than silently mocked:
 
-- panic activation;
-- real keyword detection;
-- evidence audio capture;
-- evidence encryption;
-- Android Keystore signing;
-- Merkle integrity verification;
-- local evidence persistence;
-- Notify Circle delivery through at least one genuine path;
-- Nearby mesh relay between physical devices.
+- Anonymous micro-reporting (hazard selection, location/time context, Room persistence);
+- Local offline report storage and queuing;
+- BLE / Wi-Fi Direct mesh relay using Google Nearby Connections between physical devices;
+- Spatio-temporal pattern detection;
+- Deterministic trust and anti-gaming evaluation;
+- Actionable rising-pattern early-warning alerts.
 
 For Nearby mesh relay, a valid demonstration may involve two physical devices in the same room.
 
-The following may use controlled and explicitly reported fallbacks during the hackathon:
+The following may use controlled and explicitly reported fallbacks or supporting implementations during the hackathon:
 
-- scream detection;
-- motion detection;
-- signal fusion complexity;
-- SMS delivery;
-- legal LLM drafting;
-- blockchain anchoring.
+- SMS delivery fallback;
+- AI legal complaint drafting;
+- Evidence audio capture & encryption (optional supporting);
+- Blockchain anchoring.
 
 "Fallback" does not mean invisible substitution. Every fallback must be observable in implementation, configuration, logs, UI where appropriate, and final reporting.
-
-Machine Learning Model Rules
-
-Implement the real TensorFlow Lite model pipeline and interfaces even when the final trained project model is not yet available.
-
-A clearly labelled development or test model may be used temporarily.
-
-If no model is supplied, you may select an appropriate openly licensed substitute model when permitted by the environment.
-
-For every substitute model, document:
-
-- source;
-- license;
-- intended purpose;
-- known limitations;
-- that it is a substitute for the final model.
-
-Do not commit unnecessarily large model binaries unless explicitly required. Generated artifacts and model binaries should normally remain outside version control unless the repository intentionally tracks them.
-
-Do not claim that a development model has been trained or validated specifically for this project.
 
 Evidence and Cryptography
 
@@ -368,7 +398,7 @@ If unrelated tests already fail, report them but continue when they are genuinel
 
 Backend and Agent Rules
 
-The FastAPI backend is optional for core safety operation.
+The FastAPI backend is optional for core safety and reporting operation.
 
 Core offline functionality must remain usable without backend authentication.
 
@@ -516,13 +546,13 @@ Use conventional commit messages.
 
 Examples:
 
-"feat(android): add encrypted incident evidence storage"
+"feat(android): add anonymous micro-report storage"
 
-"test(core): cover incident state transitions"
+"test(core): cover spatio-temporal pattern trust rules"
 
-"fix(mesh): prevent duplicate relay loops"
+"fix(mesh): prevent duplicate relay loops in report forwarding"
 
-"docs(adr): record evidence encryption decision"
+"docs(adr): record pattern detection trust model decision"
 
 Do not commit:
 
