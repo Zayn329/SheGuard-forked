@@ -1,138 +1,93 @@
-# Sahara Implementation Roadmap
+# SheGuard Implementation Roadmap
 
-This document outlines the coherent milestones for building Sahara according to `architecture.yaml`, `PRD.md`, `docs/api/`, `bdd/features/`, and `AGENTS.md`.
+This document outlines the coherent milestones for building **SheGuard** (Team Aegis, Problem Statement CX1001) according to `architecture.yaml`, `docs/SHEGUARD_PRD.md`, and `AGENTS.md`.
+
+---
+
+## Active Target Architecture & Product Intent
+- **Product:** SheGuard
+- **Team:** Aegis
+- **Problem Statement:** CX1001
+- **Domain:** Women Safety & Social Impact — Preventive & Community Safety
+- **Canonical Product Contract:** `docs/SHEGUARD_PRD.md`
+- **Technical Architecture Contract:** `architecture.yaml`
+- **Legacy Context:** Sahara represents legacy repository context. Reusable infrastructure (Room, Nearby Connections mesh relay, AES-256-GCM, FastAPI) is retained, while SheGuard MVP core logic governs implementation.
 
 ---
 
 ## Hackathon Core Demo Path Overview
-The critical path prioritized across the milestones is:
-**Monitoring → Keyword Detection → Possible Distress → Confirmation → Evidence Capture → AES-256-GCM Encryption → Keystore Signing → Merkle Sealing → Local Persistence → Delivery / Notify Circle (Mesh & Direct SMS Fallback).**
+The critical path prioritized across the milestones is the deterministic pipeline:
+**Report → Local Persistence → Detect → Trust → Alert (with BLE / Wi-Fi Direct Mesh Propagation)**
+
+- **Local Operation = Fundamental Guarantee:** Local reporting, local Room persistence, local spatio-temporal pattern detection, local trust evaluation, and local early-warning alerting function deterministically on-device without Internet, backend, or mesh.
+- **Mesh Communication = Core MVP Capability:** BLE / Wi-Fi Direct store-and-forward relay allows nearby participating devices to exchange compact reports and pattern signals without Internet. Mesh failure or absence of peers does NOT break local operation.
+- **Backend Synchronization = Supporting Capability:** Asynchronous synchronization when Internet connectivity returns.
 
 ---
 
-## Milestone 1: Android Project Foundation & Core Infrastructure Architecture
-- **Goal:** Establish the native Kotlin Android project structure (`android/`), Clean Architecture directory layers (`core`, `features`, `services`), dependencies, database entities/Room setup, and permission declaration.
-- **Relevant Architecture Components:** `repository.directories.android`, `technology.android`, `privacy`.
-- **Relevant Specs:** `docs/api/README.md`.
-- **Relevant BDD Scenarios:** `bdd/features/permissions.feature` (permission explanation and graceful handling).
-- **Protected Modules Touched:** None directly in Milestone 1 (prepares foundations for all).
-- **Dependencies Required:** Kotlin Coroutines/Flow, Jetpack Compose, Room (SQLite), Hilt/Koin (DI if needed), AndroidX Core/Lifecycle/WorkManager.
-- **Real-Device Requirements:** Physical Android device or Emulator with API level 26+ (Android 8.0+).
-- **Main Risks:** Complex Gradle project configuration and multi-module setup overhead.
-- **Acceptance Criteria:**
-  - Android application compiles successfully with Jetpack Compose support.
-  - Room database and basic schemas compile.
-  - Clean architecture boundaries (`core/domain`, `core/data`, `core/security`, `services/`, `features/`) established.
+## Phase 0: Contract, Architecture & Governance Migration [COMPLETED]
+- **Goal:** Establish canonical SheGuard contracts, technical architecture, coding-agent governance rules, and complete an inspection-only audit of existing repository infrastructure.
+- **Status:** COMPLETED. Created `docs/SHEGUARD_PRD.md`, updated `architecture.yaml` (v2.1), updated `AGENTS.md`, and completed the implementation audit.
 
 ---
 
-## Milestone 2: On-Device Deterministic Distress Detection Engine
-- **Goal:** Build the on-device detection engine consisting of TensorFlow Lite keyword spotting, hybrid scream detection signal handling, accelerometer motion analysis, and configurable signal fusion.
-- **Relevant Architecture Components:** `components.safety_agent`, `detection`, `technology.android.machine_learning`, `technology.android.sensors`.
-- **Relevant Specs:** `architecture.yaml` (section `detection`), `docs/specs/detection.yaml` (when created).
-- **Relevant BDD Scenarios:** `bdd/features/monitoring.feature`.
-- **Protected Modules Touched:** `distress detection` [PROTECTED].
-- **Dependencies Required:** TensorFlow Lite runtime (`org.tensorflow:tensorflow-lite`), Android AudioRecord API, SensorManager.
-- **Real-Device Requirements:** Real Android device recommended for microphone input and accelerometer hardware sensing.
-- **Main Risks:** Audio record foreground permission restrictions on Android 14+; false positives in KWS model.
+## Phase 1: Report — Low-Friction Anonymous Micro-Reporting
+- **Goal:** Build the low-friction anonymous micro-reporting UI, domain/data models (`MicroReport`), Room persistence (`MicroReportEntity`), and store-and-forward local queuing.
+- **Relevant Architecture Components:** `micro_reporter`, `data_models.MicroReport`, `persistence.primary`.
+- **Relevant Specs & BDD:** `docs/SHEGUARD_PRD.md` (Section 6 & 7), `bdd/features/sheguard_micro_report.feature` (when created).
+- **Protected Modules Touched:** `micro_reporter` [PROTECTED].
 - **Acceptance Criteria:**
-  - Real AudioRecord stream feeds TFLite keyword detection model.
-  - Detection events fire deterministically on-device without network calls.
-  - Multi-signal fusion rule `keyword OR (scream AND motion)` is evaluated in real-time.
+  - User can create an anonymous micro-report selecting hazard category, approximate location, and timestamp.
+  - Micro-report persists locally in SQLite / Room database.
+  - Operates completely offline without network calls.
 
 ---
 
-## Milestone 3: Incident State Machine, Foreground Service & Panic Controller
-- **Goal:** Implement the persistent Android Foreground Service for safety monitoring, the deterministic Incident State Machine (`idle` -> `monitoring` -> `suspicious_signal` -> `candidate_incident` -> `pending_confirmation` -> `active_incident` -> `sealed` -> `archived`), and explicit Panic activation (in-app button & cancellation window).
-- **Relevant Architecture Components:** `incident_state_machine`, `components.panic_controller`, `technology.android.background_execution`.
-- **Relevant Specs:** `architecture.yaml` (section `incident_state_machine`).
-- **Relevant BDD Scenarios:** `bdd/features/incident.feature`, `bdd/features/panic.feature`.
-- **Protected Modules Touched:** `incident state machine` [PROTECTED], `panic activation` [PROTECTED].
-- **Dependencies Required:** AndroidX Lifecycle, Foreground Service permissions (`FOREGROUND_SERVICE_MICROPHONE`).
-- **Real-Device Requirements:** Physical device required to test persistent foreground notification lifecycle and physical volume/gesture trigger.
-- **Main Risks:** Android OS background execution limits and OEM battery killer kills of foreground service.
+## Phase 2: Detect — Spatio-Temporal Pattern Engine
+- **Goal:** Implement the deterministic `SpatioTemporalPatternEngine` that aggregates local and mesh-received micro-reports within spatial proximity and temporal windows to identify emerging risk patterns.
+- **Relevant Architecture Components:** `spatio_temporal_pattern_engine`, `data_models.SpatioTemporalPattern`, `reporting_pattern_state_machine`.
+- **Relevant Specs & BDD:** `architecture.yaml` (Section `spatio_temporal_pattern_engine`), `docs/SHEGUARD_PRD.md` (Section 6).
+- **Protected Modules Touched:** `spatio_temporal_pattern_engine` [PROTECTED].
 - **Acceptance Criteria:**
-  - Android Foreground Service runs continuously with user-visible notification.
-  - In-app Panic button triggers cancellation countdown window (3-5s).
-  - State machine transitions correctly and logs audit events to SQLite.
+  - Deterministically clusters micro-reports using configurable spatial proximity and temporal window thresholds.
+  - Evaluates pattern candidate state transitions on-device without cloud dependencies.
 
 ---
 
-## Milestone 4: Encrypted Evidence Engine & Cryptographic Integrity Sealing
-- **Goal:** Capture pre-roll and active incident evidence (audio chunks, location, accelerometer streams), perform per-incident AES-256-GCM key generation wrapped by Android Keystore, compute SHA-256 chunk hashes, build Merkle tree, and produce signed evidence manifests.
-- **Relevant Architecture Components:** `components.evidence_engine`, `components.crypto_engine`, `security`, `evidence`.
-- **Relevant Specs:** `architecture.yaml` (sections `evidence`, `security`), `docs/specs/crypto.yaml`, `docs/specs/evidence.yaml`.
-- **Relevant BDD Scenarios:** `bdd/features/evidence.feature`, `bdd/features/export.feature`.
-- **Protected Modules Touched:** `evidence encryption` [PROTECTED], `Android Keystore integration` [PROTECTED], `evidence signing and hashing` [PROTECTED], `Merkle tree logic` [PROTECTED].
-- **Dependencies Required:** `javax.crypto`, Android Keystore API, SHA-256 / AES-GCM primitives.
-- **Real-Device Requirements:** Real Android device with hardware TEE/StrongBox for hardware-backed Keystore signing.
-- **Main Risks:** Nonce reuse risks, Keystore provider differences across Android vendors.
+## Phase 3: Trust — Multi-Signal Trust & Anti-Gaming Evaluator
+- **Goal:** Implement the deterministic `TrustAndAntiGamingEvaluator` that scores pattern confidence using reporter diversity, temporal independence, spatial consistency, duplicate filtering, and rate limiting.
+- **Relevant Architecture Components:** `trust_and_anti_gaming_evaluator`, `invariants.anti_gaming_trust_rule`.
+- **Protected Modules Touched:** `trust_and_anti_gaming_evaluator` [PROTECTED].
 - **Acceptance Criteria:**
-  - Audio pre-roll buffer is maintained in-memory and committed on incident candidate state.
-  - Evidence chunks are encrypted with per-incident AES-256-GCM data keys.
-  - Merkle root is finalized and signed with Android Keystore key.
-  - Unencrypted raw evidence never touches disk or network.
+  - Enforces the non-negotiable rule: **Raw report volume alone MUST NOT determine pattern confidence or trigger an alert.**
+  - Filters out spam/duplicate reports from a single source while escalating patterns supported by diverse reporters.
 
 ---
 
-## Milestone 5: Offline Mesh Relay & Direct SMS Emergency Escalation Fallback
-- **Goal:** Implement offline peer-to-peer distress packet relay using Google Nearby Connections (BLE / Wi-Fi Direct) with hop limits & deduplication, and fallback to direct device SMS via `SmsManager`.
-- **Relevant Architecture Components:** `components.mesh_relay`, `components.fallback_manager`, `networking.mesh`, `networking.fallback`.
-- **Relevant Specs:** `docs/specs/mesh.yaml`, `bdd/features/mesh.feature`, `bdd/features/sms.feature`.
-- **Relevant BDD Scenarios:** `bdd/features/mesh.feature`, `bdd/features/sms.feature`.
-- **Protected Modules Touched:** `SMS escalation` [PROTECTED], `mesh relay` [PROTECTED].
-- **Dependencies Required:** Google Play Services Nearby (`com.google.android.gms:play-services-nearby`), Android `SmsManager`.
-- **Real-Device Requirements:** Two physical Android devices in close proximity to test Nearby Connections BLE/Wi-Fi Direct peer discovery and packet forwarding; SIM card/cellular network for SMS.
-- **Main Risks:** Nearby Connections permission complexity (location + bluetooth scan/connect) and radio discovery latency.
+## Phase 4: Alert — Actionable Rising-Pattern Early Warning
+- **Goal:** Build the `RisingPatternAlertEngine` and Jetpack Compose UI card displaying verified rising risk patterns with location, time window, risk context, and non-emergency disclaimers.
+- **Relevant Architecture Components:** `rising_pattern_alert_engine`, `data_models.RisingPatternAlert`.
+- **Protected Modules Touched:** `rising_pattern_alert_engine` [PROTECTED].
 - **Acceptance Criteria:**
-  - Device discovers nearby opted-in peer and relays compact distress packet.
-  - Hop count limits (max 12) and duplicate packet cache prevent relay loops.
-  - SMS fallback fires if primary transport fails/times out, sending concise alert with location and incident reference.
+  - Displays actionable early-warning alerts for emerging patterns that pass trust validation.
+  - Clearly includes the mandatory disclaimer: `"EARLY WARNING PATTERN ALERT. NOT A GUARANTEED EMERGENCY RESPONSE."`
 
 ---
 
-## Milestone 6: Notify Circle Management & Multi-Channel Delivery
-- **Goal:** Provide trusted contacts management (up to 5 contacts), permission controls (location sharing authorization), alert dispatching, and delivery receipt tracking.
-- **Relevant Architecture Components:** `components.notify_circle`, `policy_engine`, `data_models.NotifyContact`.
-- **Relevant Specs:** `docs/api/notify.md`, `bdd/features/notify.feature`.
-- **Relevant BDD Scenarios:** `bdd/features/notify.feature`, `bdd/features/location.feature`.
-- **Protected Modules Touched:** Policy Engine & Contact Sharing permissions.
-- **Dependencies Required:** Room persistence for contacts, Android Contacts Picker (optional integration).
-- **Real-Device Requirements:** Physical device for SMS sending or app notification testing.
-- **Main Risks:** Permission revocation during active incident.
+## Phase 5: Mesh — BLE / Wi-Fi Direct Peer Communication Capability
+- **Goal:** Adapt existing Nearby Connections mesh relay infrastructure (`NearbyConnectionsMeshRelay`, `MeshDeduplicationCache`) for compact `MicroReport` and `PatternAlert` payloads over BLE / Wi-Fi Direct, including physical Google Play Services Nearby Connections API binding.
+- **Relevant Architecture Components:** `mesh_relay`, `data_models.MeshPacket`, `technology.android.mesh`.
+- **Protected Modules Touched:** `mesh_relay` [PROTECTED].
 - **Acceptance Criteria:**
-  - User can add/edit trusted contacts and set explicit location sharing permissions.
-  - Notification dispatch attempts eligible paths independently.
-  - Delivery state (Delivered/Pending/Failed) is clearly displayed in UI.
+  - Nearby physical devices exchange compact micro-report packets peer-to-peer without Internet connectivity.
+  - Enforces deduplication cache and max hop count (max 12 hops) to prevent relay loops.
+  - Degrades gracefully if no peer devices are discovered, preserving local report creation and local alerting.
 
 ---
 
-## Milestone 7: Optional FastAPI Backend & AI Legal Drafting Agent
-- **Goal:** Create the minimal FastAPI Python backend service (`backend/`) providing phone OTP auth abstraction, incident metadata sync batch API, optional Merkle root anchoring API, and LLM-assisted FIR/incident summary draft generation.
-- **Relevant Architecture Components:** `backend`, `components.backend_api`, `components.legal_agent`, `docs/api/`.
-- **Relevant Specs:** `docs/api/auth.md`, `docs/api/legal.md`, `docs/api/incident-sync.md`, `docs/api/anchoring.md`, `docs/api/openapi.yaml`.
-- **Relevant BDD Scenarios:** `bdd/features/legal_assistance.feature`.
-- **Protected Modules Touched:** None (Backend is non-safety-critical optional layer).
-- **Dependencies Required:** Python 3.11+, FastAPI, Pydantic v2, Uvicorn, pytest, `uv`.
-- **Real-Device Requirements:** Server environment / local dev server accessible from Android client via network.
-- **Main Risks:** LLM provider API failures or rate limits.
+## Phase 6: Demo Hardening & End-to-End Verification
+- **Goal:** Wire the complete SheGuard MVP flow into a Jetpack Compose dashboard (`SheGuardDashboardScreen`) with an offline "Simulate Nearby Reports" toggle for live hackathon demonstration.
+- **Relevant Architecture Components:** All SheGuard core components.
 - **Acceptance Criteria:**
-  - FastAPI service implements `/api/v1/` OpenAPI contract.
-  - Structured incident metadata can be converted to an FIR complaint draft.
-  - Every legal draft contains the required mandatory disclaimer: `"DRAFT FOR HUMAN AND LEGAL REVIEW. THIS DOCUMENT HAS NOT BEEN FILED WITH ANY AUTHORITY."`
-  - Core offline Android app functions completely when backend is unreachable.
-
----
-
-## Milestone 8: End-to-End Golden Demo Integration & Verification
-- **Goal:** Wire the full golden demo path together with Jetpack Compose UI (Monitoring ON/OFF, Panic button, Incident Active view, Offline Help Directory, Evidence Export & Verification viewer).
-- **Relevant Architecture Components:** All system components, `components.help_directory`, `verifier`.
-- **Relevant Specs:** `PRD.md` (Golden Demo Scenario), `bdd/features/export.feature`, `bdd/features/failure_and_degraded_behavior.feature`.
-- **Relevant BDD Scenarios:** All core scenarios (`@core`, `@demo`).
-- **Protected Modules Touched:** Verification of all protected modules.
-- **Dependencies Required:** Android UI libraries, baseline verification scripts.
-- **Real-Device Requirements:** 2 Physical Android devices for golden demo flow.
-- **Main Risks:** Edge case UI state mismatch or unhandled background permission state.
-- **Acceptance Criteria:**
-  - Complete golden demo path runs smoothly offline: Keyword -> Distress -> Confirm -> Capture -> Encrypt -> Sign -> Seal -> Relay -> SMS.
-  - Evidence package export verification tool verifies valid package integrity and rejects tampered packages.
+  - Demonstrates the end-to-end flow completely offline on physical devices or emulator: **Report → Local Storage → Detect → Trust → Early Warning Alert (with BLE Mesh Relay)**.
+  - Verifies that spam/duplicate reports do not trigger false pattern alerts, while diverse reports generate valid early warnings.
