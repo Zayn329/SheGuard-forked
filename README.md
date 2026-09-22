@@ -1,233 +1,239 @@
-# SheGuard — Offline-First Community Safety & Early Warning System
+# SheGuard 🛡️ — Offline-First Mesh & AI Safety System
 
-> **Team Aegis** | **Problem Statement Identifier:** CX1001
-> **Domain:** Women Safety & Social Impact — Preventive & Community Safety
-> **Canonical Specifications:** `architecture.yaml` | `docs/SHEGUARD_PRD.md`
-
----
-
-## 🛡️ Executive Summary
-
-**SheGuard** is an offline-first intelligent safety companion and early warning system designed to protect individuals in high-risk, low-connectivity, or urban environments. By converting low-friction, anonymous micro-reports into verified spatio-temporal risk patterns and actionable community-level early warnings, SheGuard empowers communities without depending on continuous cloud connectivity, mobile data networks, or LLMs in the critical safety path.
-
-SheGuard operates on a **3-Tiered Hierarchy**:
-1. **Local Operation (Fundamental Guarantee):** Local report creation, Room database persistence, on-device spatio-temporal pattern clustering, multi-signal trust scoring, and early warning alert generation function 100% offline.
-2. **Mesh Communication (MVP Capability):** Peer-to-peer relay via Google Nearby Connections (BLE / Wi-Fi Direct) propagates compact safety reports and pattern signals across nearby disconnected devices using store-and-forward semantics.
-3. **Backend Synchronization (Supporting Capability):** Asynchronous metadata sync and AI legal complaint drafting take place when internet connectivity is restored.
+> **Team Aegis** | Problem Statement **CX1001** (`teamAegis_CX1001_codex2026`)
+> *Turning individual safety signals into verified, community-wide early warnings — zero internet required.*
 
 ---
 
-## 📐 Architecture Overview
+## 🌟 Pitch & Vision
 
-SheGuard strictly separates the core deterministic safety path from online supporting capabilities. Below is the end-to-end architecture diagram:
+In sudden danger, a victim cannot open a complex app, navigate menus, or count on stable 5G connectivity. Traditional safety apps are reactive SOS buttons that fail precisely when needed most: in signal dead zones, jammed crowds, or remote areas.
+
+**SheGuard** reimagines personal safety from the ground up. It is an **offline-first, intelligence-driven safety companion** that transforms low-friction, anonymous micro-reports and real-time acoustic sensors into verified, community-wide early warning alerts.
+
+By combining on-device ML, peer-to-peer mesh routing, multi-signal trust scoring, and cryptographic evidence sealing, SheGuard detects emerging threat patterns *before* incidents escalate—**operating 100% locally on-device**.
+
+---
+
+## 🚀 Key Innovation Highlights
+
+| Feature | The SheGuard Advantage |
+|---|---|
+| 📶 **Zero-Internet Operation** | Operates via a strict **3-Tier Offline-First Hierarchy**: Local Execution → P2P Mesh Relay → Async Cloud Sync. |
+| 🎙️ **On-Device TFLite Scream Detection** | Runs quantized **YAMNet neural networks** locally at 16kHz to identify acoustic screams and yells in milliseconds without streaming raw audio anywhere. |
+| 🕸️ **Peer-to-Peer Mesh Network** | Relays anonymous safety packets hop-by-hop across nearby devices using **BLE & Wi-Fi Direct** via Google Nearby Connections. |
+| 🛡️ **Anti-Gaming & Trust Engine** | Prevents false alarms and malicious spam using multi-signal evaluation (reporter diversity, temporal independence, spatial consistency). |
+| 🌳 **Merkle Tree Evidence Sealing** | Cryptographically seals audio, location logs, and sensor streams on-device with SHA-256 Merkle trees signed by Android Keystore for tamper-proof auditing. |
+| 🗺️ **Dynamic Safety Routing (DSR)** | Recommends safe paths and warns users entering active spatio-temporal danger clusters. |
+
+---
+
+## 🧠 Deep-Dive: Core Technologies Explained Simply
+
+### 1. 🎙️ TFLite Acoustic Scream Detector
+* **What is it?**
+  TensorFlow Lite (TFLite) is Google's lightweight framework for running machine learning models directly on mobile edge devices.
+* **How SheGuard uses it:**
+  SheGuard embeds a custom-tuned **YAMNet model** (a deep convolutional neural network trained on AudioSet classes). The app continuously samples audio in rolling 0.975s frames at 16kHz.
+* **Why it matters for safety:**
+  When a distress scream or high-pitch yell occurs, TFLite detects it in **real-time on-device** (evaluating AudioSet indices for *Scream, Yell, Shout, Screaming*).
+* **Privacy Guarantee:**
+  Raw audio **never leaves the device** and is never uploaded or sent to an LLM. Inference runs entirely offline inside mobile memory.
+
+---
+
+### 2. 🌳 Cryptographic Evidence Sealing & Merkle Roots
+* **What is a Merkle Root?**
+  A **Merkle Tree** is a cryptographic data structure where every "leaf" is a hash of a data block (e.g., a 5-second audio chunk or location coordinate), and every parent node is a cryptographic hash of its children. The single hash at the very top is the **Merkle Root**.
+* **How SheGuard uses it:**
+  During active distress, SheGuard captures continuous evidence (audio streams, GPS logs, motion telemetry). Each chunk is encrypted with hardware-backed **AES-256-GCM** keys from the Android Keystore and hashed using **SHA-256**. The hashes are organized into a binary Merkle tree.
+* **Why it matters for judges & legal auditability:**
+  If even a *single byte* of evidence is tampered with, deleted, or altered post-incident, recalculating the Merkle tree will yield a completely different Merkle Root. By signing the final Merkle Root with the device's hardware key, SheGuard provides **tamper-evident legal evidence packages** without relying on a central database.
+
+---
+
+### 3. 🗺️ Dynamic Safety Routing (DSR) & Spatio-Temporal Heatmaps
+* **What is Dynamic Safety Routing (DSR)?**
+  Unlike standard maps (Google Maps/Apple Maps) that optimize strictly for shortest travel time, **DSR** calculates optimal navigation paths based on real-time **spatial risk heatmaps**.
+* **How SheGuard uses it:**
+  The on-device **Spatio-Temporal Pattern Engine** clusters anonymous micro-reports using Haversine spatial distance (e.g., 200m radius) and sliding temporal windows (e.g., 30–120 minutes). Active risk clusters are factored into navigation scoring to steer users away from unlit streets, active harassment zones, or crowded suspicious gatherings.
+
+---
+
+### 4. 🕸️ BLE & Wi-Fi Direct Peer-to-Peer Mesh Relay
+* **What is it?**
+  A mesh network allows mobile devices to talk directly to each other over Bluetooth Low Energy (BLE) and Wi-Fi Direct without cell towers, Wi-Fi routers, or internet access.
+* **How SheGuard uses it:**
+  Powered by Google Nearby Connections, SheGuard devices broadcast compact, privacy-minimized safety packets hop-by-hop (up to 12 hops) with store-and-forward queueing and cryptographic packet deduplication.
+* **Why it matters:**
+  In signal blackouts, underground transit, or crowded protests, micro-reports and early warnings spread organically across nearby devices in the mesh network.
+
+---
+
+### 5. 🛡️ Multi-Signal Trust & Anti-Gaming Layer
+* **The Problem:** How do you prevent bad actors or trolls from spamming fake reports to create false panic?
+* **The Solution:** SheGuard enforces a strict architectural invariant: **Raw report volume alone NEVER triggers an alert.**
+* **Trust Evaluation Signals:**
+  1. **Reporter Diversity:** Requires independent anonymous tokens across multiple physical devices.
+  2. **Temporal Independence:** Spreads validation over time windows to block rapid bot/script flooding.
+  3. **Spatial Consistency:** Validates that reports originate within coherent physical proximity.
+
+---
+
+## 🏗️ Architectural Hierarchy (Offline-First)
+
+SheGuard operates on a strict **3-Tier Offline-First Hierarchy**:
 
 ```mermaid
 graph TD
-    subgraph Client_Device ["📱 SheGuard Android Client (Local Operation)"]
-        UI["🎨 Jetpack Compose UI (Reporting & Alerts)"]
-
-        subgraph Core_Pipeline ["⚡ Deterministic Pipeline (No LLM / No Internet)"]
-            MR["1️⃣ MicroReporter<br/>(Low-friction UI & Queue)"]
-            STPE["2️⃣ SpatioTemporalPatternEngine<br/>(Haversine & Time Windowing)"]
-            TRUST["3️⃣ TrustAndAntiGamingEvaluator<br/>(5-Stage Multi-Signal Scoring)"]
-            ALERT["4️⃣ RisingPatternAlertEngine<br/>(Early Warning Generator)"]
-        end
-
-        subgraph Local_Storage ["💾 Encrypted Local Persistence"]
-            ROOM[("Room DB v5<br/>MicroReports | Patterns | Alerts")]
-            KEYSTORE["Android Keystore + AES-256-GCM"]
-        end
-
-        subgraph Support_Services ["🎙️ Supporting Local Services"]
-            FUSION["Signal Fusion & Scream Detector (TFLite)"]
-            EVID["Evidence Capture & Merkle Sealing"]
-        end
+    subgraph Tier1 [Tier 1: Local Operation — Fundamental Guarantee]
+        A[Anonymous Micro-Reporting UI] --> B[(Room Local Persistence)]
+        C[On-Device TFLite Scream Classifier] --> B
+        B --> D[Spatio-Temporal Pattern Engine]
+        D --> E[Multi-Signal Trust Evaluator]
+        E --> F[Rising-Pattern Early Warning Alert]
     end
 
-    subgraph Mesh_Network ["📡 P2P Mesh Communication Network"]
-        NEARBY["Google Nearby Connections<br/>(BLE & Wi-Fi Direct)"]
-        CACHE["Mesh Deduplication Cache & Hop Limits (Max 12)"]
-        PEER["📱 Peer Device B"]
+    subgraph Tier2 [Tier 2: Mesh Communication — Core MVP Capability]
+        B --> G[P2P Store & Forward Mesh Relay]
+        G <-->|BLE & Wi-Fi Direct| H[Nearby Peer Device 1]
+        G <-->|BLE & Wi-Fi Direct| I[Nearby Peer Device 2]
     end
 
-    subgraph Backend_Cloud ["☁️ Supporting Backend (Optional)"]
-        API["FastAPI Backend (/api/v1)"]
-        DB[("PostgreSQL")]
-        LEGAL["AI Legal Agent (Groq / Local Provider)"]
+    subgraph Tier3 [Tier 3: Backend Synchronization — Supporting Capability]
+        B -.->|When Online| J[FastAPI Backend Sync]
+        J -.-> K[Optional AI Legal Agent]
     end
 
-    %% Flow Connections
-    UI --> MR
-    MR -->|Persist| ROOM
-    ROOM --> STPE
-    STPE --> TRUST
-    TRUST -->|Score >= 0.60| ALERT
-    ALERT -->|Display Early Warning| UI
-
-    %% Mesh Connections
-    MR -.->|Queue Mesh Packet| NEARBY
-    ALERT -.->|Relay Alert Payload| NEARBY
-    NEARBY <-->|Store & Forward| PEER
-    NEARBY --> CACHE
-    NEARBY -.->|Receive Relayed Signal| ROOM
-
-    %% Supporting Evidence
-    FUSION --> EVID
-    EVID --> KEYSTORE
-
-    %% Sync Connections
-    ROOM -.->|Async Sync when Online| API
-    API --> DB
-    API --> LEGAL
+    style Tier1 fill:#1a237e,stroke:#3949ab,color:#fff
+    style Tier2 fill:#004d40,stroke:#00897b,color:#fff
+    style Tier3 fill:#37474f,stroke:#78909c,color:#fff
 ```
 
 ---
 
-## 🌟 Key Features (Global → Local Breakdown)
+## 🔁 End-to-End Data & Signal Flow
 
-### 1. Global & Community Level Features
-- **Deterministic Spatio-Temporal Hazard Clustering:** Aggregates anonymous hazard reports in real-time across spatial radii (100m–1km) and temporal windows (30m–2h) to detect emerging localized danger zones before incidents escalate.
-- **Peer-to-Peer Safety Mesh Network:** Extends safety coverage into dead-zones, crowded rallies, or transit routes by propagating compact reports and alerts via BLE and Wi-Fi Direct across participating peer devices.
-- **Anti-Gaming Early Warning Network:** Protects against false alarms, spam, and coordinated mobbing through a strict multi-signal verification engine requiring reporter diversity and temporal independence.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User / Sensors
+    participant App as Android Device (Local)
+    participant Engine as Spatio-Temporal Engine
+    participant Trust as Anti-Gaming Trust Evaluator
+    participant Mesh as P2P Mesh Network
+    participant Peer as Nearby Peer Device
 
-### 2. Device & Local Application Level Features
-- **Low-Friction Anonymous Micro-Reporting (`MicroReporter`):** Enables users to log hazards (e.g., poor lighting, harassment, suspicious activity, feeling followed) with 1-tap simplicity, coarse location precision (~1km), and no personal identifying information (PII).
-- **Multi-Signal Trust Scoring (`TrustAndAntiGamingEvaluator`):** Implements a 5-stage deterministic evaluation pipeline:
-  1. *Reporter Diversity:* Evaluates unique anonymous reporter tokens.
-  2. *Temporal Independence:* Checks timestamps across independent windows.
-  3. *Spatial Consistency:* Verifies spatial clustering tolerances.
-  4. *Duplicate Filtering:* Suppresses repetitive payloads.
-  5. *Rate/Flood Resistance:* Prevents device spamming.
-- **Actionable Rising-Pattern Early Warning (`RisingPatternAlertEngine`):** Surfaces emerald/amber early-warning cards complete with hazard category, approximate radius, risk score, trust badge (HIGH/MEDIUM/LOW), and mandatory non-emergency disclaimers.
-- **Tamper-Evident Evidence Vault (`EvidenceCaptureEngine`):** Captures pre-roll audio, encrypts payload using AES-256-GCM backed by hardware Android Keystore, and generates Merkle tree cryptographic seal hashes for legal chain of custody.
-- **On-Device Sensor Fusion & Scream Detection:** Runs local TFLite audio classifiers and accelerometer gesture monitoring to trigger automated distress logging without network dependency.
+    rect rgb(20, 30, 50)
+        Note over U,App: Step 1: Signal Capture (Offline)
+        U->>App: Low-Friction Micro-Report OR Acoustic Scream (TFLite)
+        App->>App: Save Locally to Room Database & AES-256 Encrypt Evidence
+    end
 
-### 3. Backend & Extended Services
-- **Asynchronous Incident Synchronization:** Batch-synchronizes non-sensitive metadata and aggregated pattern states when internet connectivity returns.
-- **AI Legal Complaint Drafting Agent (`LegalAgent`):** Translates structured incident logs into formal FIR / legal complaint drafts using LLM provider abstractions (Groq / Local model) with explicit legal review disclaimers.
+    rect rgb(20, 50, 40)
+        Note over App,Trust: Step 2: Local Processing & Clustering
+        App->>Engine: Queue Micro-Report for Clustering
+        Engine->>Engine: Spatial (Haversine) & Temporal Clustering
+        Engine->>Trust: Evaluate Candidate Pattern
+        Trust->>Trust: Check Reporter Diversity & Spam Filtering
+    end
 
----
-
-## 🏛️ Architectural Decision Records (ADRs) & Why They Exist
-
-| Decision | Architecture / Design Choice | Rationale & Safety Justification ("Why It Exists") |
-| :--- | :--- | :--- |
-| **ADR-0001** | **Offline-First 3-Tier Hierarchy** | Emergency situations, subterranean transit, or remote areas frequently suffer from total network loss. Personal safety must never depend on cell towers or cloud servers. |
-| **ADR-0002** | **No LLMs in Critical Safety Path** | LLMs are non-deterministic, network-dependent, prone to hallucinations, and introduce high latency. Core micro-reporting, pattern detection, trust scoring, and alerting use pure deterministic Kotlin code. |
-| **ADR-0003** | **Anti-Gaming Invariant (Diversity over Volume)** | Raw report volume alone **MUST NOT** escalate pattern confidence or trigger alerts. This rule prevents malicious actors from spamming false reports to trigger public panic or misdirect security resources. |
-| **ADR-0004** | **Store-and-Forward Mesh with Hop Limits** | Peer devices forward compact packets via BLE / Wi-Fi Direct. Packets enforce a deduplication cache hash and max 12 hop count limit to prevent broadcast loops and network saturation. |
-| **ADR-0005** | **Privacy & Anonymity by Default** | Continuous location tracking and PII collection are prohibited. Location coordinates are rounded to 2 decimal places (~1km precision), and reporters receive anonymous rolling cryptographic tokens to protect against retaliation. |
-| **ADR-0006** | **AES-256-GCM + Hardware Keystore + Merkle Sealing** | Evidence collected locally must be legally admissible and tamper-evident. Encrypting with hardware-backed keys and generating Merkle roots ensures proof of integrity without uploading raw evidence to the cloud. |
-| **ADR-0007** | **Explicit Database Migration Strategy (Room v1 → v5)** | Database schema updates must preserve historical evidence and reports offline. Destructive migrations (`fallbackToDestructiveMigration()`) are strictly forbidden. |
-
----
-
-## 💻 Tech Stack
-
-### Mobile Application (Android)
-- **Language:** Kotlin 1.9+
-- **UI Framework:** Jetpack Compose (Material 3 Design System)
-- **Architecture Pattern:** Clean Architecture + MVVM + Modular Feature Architecture
-- **Asynchronous Concurrency:** Kotlin Coroutines & Flow
-- **Local Persistence:** Room Database (SQLite) with explicit migration steps (v1 through v5)
-- **Peer-to-Peer Mesh Transport:** Google Nearby Connections API (BLE & Wi-Fi Direct)
-- **Security & Cryptography:** Android Keystore System, Java Cryptography Architecture (AES-256-GCM, SHA-256)
-- **On-Device Machine Learning:** TensorFlow Lite (Audio Scream & Speech Command Classifier)
-
-### Backend Service (`backend/`)
-- **Language:** Python 3.11+
-- **Web Framework:** FastAPI (Asynchronous REST API)
-- **Data Validation:** Pydantic v2
-- **Database & ORM:** PostgreSQL / SQLite with SQLAlchemy & Asyncpg
-- **AI / LLM Integration:** Groq API / Local LLM provider abstractions with PII redaction
-
----
-
-## 🔄 Core SheGuard Pipeline Mechanics
-
-The SheGuard core engine follows a strict 5-stage deterministic lifecycle:
-
-```
-[ MicroReport ] ➡️ [ Local Persistence ] ➡️ [ SpatioTemporal Detection ] ➡️ [ Multi-Signal Trust ] ➡️ [ Early Warning Alert ] 🔄 [ BLE Mesh Relay ]
+    rect rgb(50, 20, 40)
+        Note over Trust,Peer: Step 3: Actionable Alert & Peer Relay
+        alt Trust Score > Threshold
+            Trust->>App: Surface Early Warning Alert (Vibration + HUD)
+        end
+        App->>Mesh: Queue Compact Mesh Packet
+        Mesh->>Peer: Relay Hop-by-Hop via BLE / Wi-Fi Direct
+    end
 ```
 
-1. **REPORT (Phase 1):** User selects a hazard category (e.g., `POOR_LIGHTING`, `HARASSMENT`, `FEELING_FOLLOWED`). A `MicroReport` object is created with anonymous reporter token and coarsened coordinates, then saved into local Room persistence.
-2. **DETECT (Phase 2):** `SpatioTemporalPatternEngine` runs Haversine spatial calculations and temporal window matching across all active reports. When proximity thresholds match, a `SpatioTemporalPattern` candidate is formed.
-3. **TRUST (Phase 3):** `TrustAndAntiGamingEvaluator` checks reporter diversity, temporal independence, duplicate filters, and rate limits. If trust score exceeds `0.60`, state transitions to `PATTERN_EMERGING`.
-4. **ALERT (Phase 4):** `RisingPatternAlertEngine` generates a deterministic `RisingPatternAlert` with trust level badge (`HIGH` ≥ 0.80, `MEDIUM` 0.60–0.79) and non-emergency disclaimers.
-5. **MESH (Phase 5):** `SheGuardMeshAdapter` packages the alert into a `MeshPacket` payload and broadcasts it via `NearbyConnectionsMeshRelay`. Nearby peer devices receive, validate, store, and display the alert with a distinct `"Received via nearby device"` badge.
+---
+
+## 🛠️ Tech Stack & Architecture
+
+### Android Client (`/android`)
+* **Language:** Kotlin 1.9+
+* **UI Framework:** Jetpack Compose with Material 3 & Custom Safety UX Design System
+* **Architecture:** Clean Architecture + MVVM + Feature Modules
+* **Database:** Room (SQLite) with explicit migration paths
+* **ML / On-Device AI:** TensorFlow Lite (`yamnet.tflite` model) with hybrid DSP audio processing
+* **Mesh Network:** Google Nearby Connections API (BLE + Wi-Fi Direct)
+* **Security & Cryptography:** Android Keystore, AES-256-GCM file storage, SHA-256 Merkle Trees, ECDSA Signatures
+
+### Backend Service (`/backend`)
+* **Language / Framework:** Python 3.11+ / FastAPI
+* **Data Validation:** Pydantic v2
+* **Storage / Sync:** PostgreSQL / SQLite
+* **AI Provider Strategy:** Groq / Local LLM provider abstraction for optional draft legal assistance
 
 ---
 
-## 📁 Repository Structure
+## 📂 Repository Structure
 
 ```
 .
-├── AGENTS.md                   # Agent governance and coding rules
-├── PRD.md / docs/SHEGUARD_PRD.md # Canonical Product Requirements Document
-├── architecture.yaml           # Highest authority technical specification (v2.1)
-├── PROGRESS.md                 # Implementation progress & milestone status
-├── ROADMAP.md                  # Development phase roadmap
-├── android/                    # Native Android Kotlin Application
-│   ├── app/                    # Compose UI, MainActivity, Exporters, Screens
-│   ├── core/                   # Core domain, data repositories, Room DB, SheGuard engines
-│   │   ├── domain/engine/      # Pattern Engine, Trust Evaluator, Alert Engine
-│   │   ├── data/db/            # Room Database (v5), Entities, DAOs, Migrations
-│   │   └── security/           # Keystore & AES-256-GCM Cryptography
-│   ├── services/               # Modular Android Services
-│   │   ├── detection/          # TFLite Scream Detection & Signal Fusion
-│   │   ├── evidence/           # Bounded Audio Pre-roll & Merkle Sealing Engine
-│   │   └── mesh/               # Google Nearby Connections Relay & Mesh Adapter
-├── backend/                    # Optional FastAPI Backend
-│   ├── app/                    # FastAPI endpoints, DB models, Legal Agent
-├── bdd/                        # Gherkin Feature Specifications (Cucumber/BDD)
-└── docs/                       # Specifications, API contracts, and ADRs
-    ├── adr/                    # Architecture Decision Records (0001–0009)
-    └── specs/                  # Component YAML specifications (trust, alert, mesh, ai)
+├── android/                        # Native Android Application (Kotlin)
+│   ├── app/                        # App Entry point, Jetpack Compose UI Screens
+│   ├── core/
+│   │   ├── domain/                 # Models, Repositories, SpatioTemporalPatternEngine
+│   │   ├── data/                   # Room Database, DAOs, Entity Mappings
+│   │   └── security/               # Android Keystore, AES-256-GCM, MerkleTree
+│   ├── services/
+│   │   ├── detection/              # TFLiteScreamClassifier, KeywordDetector, MotionDetector
+│   │   └── mesh/                   # Google Nearby Connections P2P Mesh Relay
+│   └── features/
+│       ├── incident/               # Incident State Machine & Foreground Safety Service
+│       └── panic/                  # Hardware & UI Panic Controller
+├── backend/                        # FastAPI Backend Service
+│   ├── app/                        # API Router, Core Config, Models
+│   └── tests/                      # Pytest integration suite
+├── docs/                           # Documentation
+│   ├── SHEGUARD_PRD.md             # Canonical Product Requirements Document
+│   ├── specs/                      # Technical specifications (AI, Trust, Mesh, Alert)
+│   └── adr/                        # Architecture Decision Records (ADRs 0001-0009)
+└── architecture.yaml               # Root Architectural Contract & Invariants
 ```
 
 ---
 
-## 🧪 Verification & Testing
+## ⚡ Quick Start & Verification
 
-SheGuard maintains extensive test coverage across unit tests, data persistence tests, and BDD scenario tests:
+### Prerequisites
+* **Android Studio:** Hedgehog (2023.1.1) or newer
+* **Android SDK:** API Level 34 (Android 14)
+* **JDK:** Java 17
 
-### Running Android Unit & Pipeline Tests
+### Building & Running Unit Tests
+
 ```bash
-# Navigate to android directory
-cd android
+# Clone the repository
+git clone https://github.com/your-org/sheguard.git
+cd sheguard
 
-# Run all unit tests across core domain, data, detection, evidence, and mesh modules
+# Execute all Android unit tests from root
 ./gradlew test
 
-# Run SheGuard Mesh relay unit tests specifically
-./gradlew :services:mesh:test
-```
-
-### Running Backend Tests
-```bash
-# Navigate to backend directory
-cd backend
-
-# Install dependencies and run pytest
-poetry install
-poetry run pytest
+# Build debug APK
+./gradlew :android:app:assembleDebug
 ```
 
 ---
 
-## 🔒 Security & Privacy Commitments
+## 🏆 Hackathon Demo Acceptance Criteria
 
-- **No Plaintext Persistence:** All local evidence and sensitive tokens are encrypted using AES-256-GCM backed by hardware keys in Android Keystore.
-- **No Unsanitised Transmission:** Raw evidence and exact location history are strictly prohibited from automatically uploading to external services or LLM providers.
-- **Non-Bypassable Trust Boundary:** Receiving relayed mesh packets or external signals never bypasses trust evaluation or triggers false patterns from raw volume.
+SheGuard satisfies all 6 mandatory MVP demo criteria defined in `docs/SHEGUARD_PRD.md`:
+
+1. ✅ **Anonymous Micro-Reporting:** Users submit quick incident/hazard reports completely offline.
+2. ✅ **Local Persistence & Queuing:** Micro-reports are stored locally in Room storage without network failures.
+3. ✅ **BLE / Wi-Fi Direct Mesh Relay:** Reports relay peer-to-peer between disconnected nearby Android devices.
+4. ✅ **Spatio-Temporal Pattern Detection:** Multiple reports cluster automatically into emerging spatial risk patterns.
+5. ✅ **Trust & Anti-Gaming Verification:** Spam/duplicate reports from single sources are filtered out; diverse reports escalate trust confidence.
+6. ✅ **Actionable Early Warning Alert:** High-confidence rising patterns display clear spatial, temporal, and risk context warnings.
 
 ---
 
-## 📜 Governance & Team Identity
+## 📄 License & Legal Disclaimer
 
-- **Product:** SheGuard
-- **Team Name:** Aegis
-- **Problem Statement:** CX1001 (Women Safety & Social Impact — Preventive & Community Safety)
-- **Highest Technical Authority:** `architecture.yaml`
-- **Canonical Product Contract:** `docs/SHEGUARD_PRD.md`
+* **Early Warning Disclaimer:** SheGuard pattern warnings are community early-warning signals and do not guarantee emergency service or police dispatch.
+* **Evidence Protection Disclaimer:** Technical integrity verification (SHA-256 Merkle root and Keystore signatures) verifies that exported safety evidence has not been tampered with post-capture. It does not guarantee court admissibility. Always consult legal counsel.
