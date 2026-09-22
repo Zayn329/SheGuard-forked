@@ -4,6 +4,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,7 +57,7 @@ fun DetectionLogScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaharaColors.WarmWhite)
+            .background(SheGuardColors.Background)
             .padding(16.dp)
     ) {
         // Header Row
@@ -68,39 +70,41 @@ fun DetectionLogScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(SaharaColors.SurfaceSubtle)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SheGuardColors.PrimaryContainer)
+                    .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(12.dp))
                     .clickable { onBack() }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = "← Back",
-                    color = SaharaColors.TextPrimary,
+                    color = SheGuardColors.Primary,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    fontSize = 13.sp
                 )
             }
 
             Text(
-                text = "Detection Log",
-                color = SaharaColors.TextPrimary,
+                text = "Real-Time Detection Log",
+                color = SheGuardColors.TextPrimary,
                 fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
+                fontSize = 18.sp
             )
 
             if (events.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(SaharaColors.SurfaceSubtle)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SheGuardColors.RoseBg)
+                        .border(1.dp, SheGuardColors.RoseBorder, RoundedCornerShape(12.dp))
                         .clickable { DetectionLogManager.clearLogs() }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = "Clear",
-                        color = SaharaColors.DangerCoral,
+                        color = SheGuardColors.RoseDanger,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
                 }
             } else {
@@ -108,12 +112,12 @@ fun DetectionLogScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Real-time log of unsealed signal detection events (screams, keywords, motion anomalies).",
-            color = SaharaColors.TextSecondary,
-            fontSize = 13.sp,
+            text = "On-device real-time acoustic distress signals and motion sensor events.",
+            color = SheGuardColors.TextSecondary,
+            fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
@@ -125,17 +129,28 @@ fun DetectionLogScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(SheGuardColors.PrimaryContainer)
+                            .border(1.dp, SheGuardColors.BorderHighlight, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "🎙️", fontSize = 28.sp)
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "No Detection Events Yet",
-                        color = SaharaColors.TextPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
+                        text = "No Detection Events Logged",
+                        color = SheGuardColors.TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Active safety monitoring will log screams, keywords, and motion signals here in real-time.",
-                        color = SaharaColors.TextSecondary,
-                        fontSize = 14.sp,
+                        text = "Acoustic scream & keyword classifiers will log live on-device inferences here.",
+                        color = SheGuardColors.TextMuted,
+                        fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 32.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
@@ -221,17 +236,20 @@ fun DetectionLogCard(
     onPlayClick: () -> Unit
 ) {
     val detectorColor = when (event.signal.detectorType) {
-        DetectorType.SCREAM -> Color(0xFFE53935)   // Red
-        DetectorType.KEYWORD -> Color(0xFFFFB300)  // Amber
-        DetectorType.MOTION -> Color(0xFF1E88E5)   // Blue
+        DetectorType.SCREAM -> SheGuardColors.RoseDanger
+        DetectorType.KEYWORD -> SheGuardColors.AmberWarning
+        DetectorType.MOTION -> SheGuardColors.CyanAccent
         else -> Color.Gray
     }
     val audioData = event.audioData
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SaharaColors.PureWhite)
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(18.dp)),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = SheGuardColors.SurfaceCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -244,15 +262,16 @@ fun DetectionLogCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(detectorColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .border(1.dp, detectorColor.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = event.signal.detectorType.name,
                             color = detectorColor,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 11.sp
                         )
                     }
 
@@ -260,8 +279,8 @@ fun DetectionLogCard(
 
                     Text(
                         text = event.timestampFormatted,
-                        color = SaharaColors.TextSecondary,
-                        fontSize = 12.sp
+                        color = SheGuardColors.TextMuted,
+                        fontSize = 11.sp
                     )
                 }
 
@@ -270,26 +289,26 @@ fun DetectionLogCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "Label: ",
-                        color = SaharaColors.TextSecondary,
-                        fontSize = 13.sp
+                        color = SheGuardColors.TextSecondary,
+                        fontSize = 12.sp
                     )
                     Text(
                         text = event.signal.label ?: "detected",
-                        color = SaharaColors.TextPrimary,
+                        color = SheGuardColors.TextPrimary,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Conf: ",
-                        color = SaharaColors.TextSecondary,
-                        fontSize = 13.sp
+                        text = "Confidence: ",
+                        color = SheGuardColors.TextSecondary,
+                        fontSize = 12.sp
                     )
                     Text(
                         text = "%.0f%%".format(event.signal.confidence * 100),
-                        color = SaharaColors.TextPrimary,
+                        color = SheGuardColors.Primary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -298,16 +317,16 @@ fun DetectionLogCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (isPlaying) SaharaColors.DangerCoral else detectorColor)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isPlaying) SheGuardColors.RoseDanger else SheGuardColors.Primary)
                         .clickable { onPlayClick() }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = if (isPlaying) "Stop" else "▶ Play",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                 }
             }

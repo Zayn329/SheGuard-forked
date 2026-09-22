@@ -56,10 +56,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -68,7 +68,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // =============================================================================
-// PRIMARY & SECONDARY BUTTONS
+// PRIMARY & SECONDARY BUTTONS (Pink & White)
 // =============================================================================
 
 @Composable
@@ -80,33 +80,36 @@ fun SaharaPrimaryButton(
     isDanger: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
-    Button(
-        onClick = {
-            try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
-            onClick()
-        },
-        enabled = enabled,
+    val containerGradient = if (isDanger) {
+        Brush.horizontalGradient(listOf(Color(0xFFF43F5E), Color(0xFFE11D48)))
+    } else {
+        Brush.horizontalGradient(listOf(Color(0xFFFB7185), Color(0xFFE11D48)))
+    }
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(52.dp)
             .shadow(
-                elevation = if (enabled) 6.dp else 0.dp,
-                shape = RoundedCornerShape(28.dp),
-                spotColor = if (isDanger) SaharaColors.DangerCoral else SaharaColors.PinkPrimary,
-                ambientColor = SaharaColors.ShadowTint
-            ),
-        shape = RoundedCornerShape(28.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isDanger) SaharaColors.DangerCoral else SaharaColors.PinkPrimary,
-            contentColor = SaharaColors.TextInverse,
-            disabledContainerColor = SaharaColors.SoftPink,
-            disabledContentColor = SaharaColors.TextDisabled
-        )
+                elevation = if (enabled) 5.dp else 0.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = if (isDanger) SheGuardColors.RoseDanger else SheGuardColors.Primary,
+                ambientColor = SheGuardColors.ShadowTint
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (enabled) containerGradient else Brush.linearGradient(listOf(SheGuardColors.BorderSubtle, SheGuardColors.BorderSubtle)))
+            .clickable(enabled = enabled) {
+                try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                onClick()
+            },
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            color = if (enabled) Color.White else SheGuardColors.TextMuted
         )
     }
 }
@@ -123,22 +126,23 @@ fun SaharaSecondaryButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(28.dp),
+            .height(52.dp),
+        shape = RoundedCornerShape(16.dp),
         border = ButtonDefaults.outlinedButtonBorder.copy(
             brush = Brush.horizontalGradient(
-                listOf(SaharaColors.BorderSubtle, SaharaColors.BorderSubtle)
+                listOf(SheGuardColors.BorderSubtle, SheGuardColors.BorderSubtle)
             )
         ),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = SaharaColors.PureWhite,
-            contentColor = SaharaColors.TextPrimary
+            containerColor = SheGuardColors.SurfaceCard,
+            contentColor = SheGuardColors.TextPrimary
         )
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp
         )
     }
 }
@@ -160,25 +164,27 @@ fun SaharaStatusBadge(
     text: String,
     style: BadgeStyle = BadgeStyle.NEUTRAL
 ) {
-    val (bgColor, textColor) = when (style) {
-        BadgeStyle.SUCCESS -> Pair(SaharaColors.SuccessGreenBg, SaharaColors.SuccessGreen)
-        BadgeStyle.INFO -> Pair(SaharaColors.VerySoftBlue, SaharaColors.BlueMuted)
-        BadgeStyle.WARNING -> Pair(SaharaColors.VerySoftYellow, SaharaColors.YellowDark)
-        BadgeStyle.ACTIVE_PINK -> Pair(SaharaColors.SoftPink, SaharaColors.PinkDeep)
-        BadgeStyle.NEUTRAL -> Pair(SaharaColors.SurfaceSubtle, SaharaColors.TextSecondary)
+    val (bgColor, textColor, borderColor) = when (style) {
+        BadgeStyle.SUCCESS -> Triple(SheGuardColors.EmeraldBg, SheGuardColors.EmeraldText, SheGuardColors.EmeraldBorder)
+        BadgeStyle.INFO -> Triple(SheGuardColors.CyanContainer, SheGuardColors.CyanAccent, SheGuardColors.CyanAccent.copy(alpha = 0.3f))
+        BadgeStyle.WARNING -> Triple(SheGuardColors.AmberBg, SheGuardColors.AmberText, SheGuardColors.AmberBorder)
+        BadgeStyle.ACTIVE_PINK -> Triple(SheGuardColors.PrimaryContainer, SheGuardColors.Primary, SheGuardColors.BorderHighlight)
+        BadgeStyle.NEUTRAL -> Triple(SheGuardColors.SurfaceElevated, SheGuardColors.TextSecondary, SheGuardColors.BorderSubtle)
     }
 
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(bgColor)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
             color = textColor
         )
     }
@@ -195,23 +201,19 @@ fun SaharaToggleCard(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    accentColor: Color = SaharaColors.PinkPrimary
+    accentColor: Color = SheGuardColors.Primary
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 4.dp,
-                shape = RoundedCornerShape(24.dp),
-                spotColor = SaharaColors.ShadowTint,
-                ambientColor = SaharaColors.ShadowTint
-            ),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SaharaColors.PureWhite)
+            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = SheGuardColors.SurfaceCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
-                .padding(20.dp)
+                .padding(18.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -221,24 +223,24 @@ fun SaharaToggleCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = SaharaColors.TextPrimary
+                    color = SheGuardColors.TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = SaharaColors.TextSecondary
+                    color = SheGuardColors.TextSecondary
                 )
             }
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = SaharaColors.PureWhite,
+                    checkedThumbColor = Color.White,
                     checkedTrackColor = accentColor,
-                    uncheckedThumbColor = SaharaColors.PureWhite,
-                    uncheckedTrackColor = SaharaColors.BorderSubtle,
-                    uncheckedBorderColor = Color.Transparent
+                    uncheckedThumbColor = SheGuardColors.TextMuted,
+                    uncheckedTrackColor = SheGuardColors.SurfaceElevated,
+                    uncheckedBorderColor = SheGuardColors.BorderSubtle
                 )
             )
         }
@@ -256,55 +258,54 @@ fun SaharaSafetyStatusCard(
     stateText: String,
     modifier: Modifier = Modifier,
     stateBadgeStyle: BadgeStyle = BadgeStyle.SUCCESS,
-    containerColor: Color = SaharaColors.PureWhite,
+    containerColor: Color = SheGuardColors.SurfaceCard,
     iconLetter: String = "✓"
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 3.dp,
-                shape = RoundedCornerShape(22.dp),
-                spotColor = SaharaColors.ShadowTint,
-                ambientColor = SaharaColors.ShadowTint
-            ),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
-                .padding(18.dp)
+                .padding(16.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
-                        .background(SaharaColors.VerySoftPink),
+                        .background(SheGuardColors.PrimaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = iconLetter,
-                        color = SaharaColors.PinkPrimary,
+                        color = SheGuardColors.Primary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        fontSize = 15.sp
                     )
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = SaharaColors.TextPrimary
+                        color = SheGuardColors.TextPrimary
                     )
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = SaharaColors.TextSecondary
+                        color = SheGuardColors.TextSecondary
                     )
                 }
             }
@@ -323,24 +324,20 @@ fun SaharaContactCard(
     relation: String,
     status: String,
     modifier: Modifier = Modifier,
-    avatarColor: Color = SaharaColors.SoftPink,
+    avatarColor: Color = SheGuardColors.PrimaryContainer,
     onRemove: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 2.dp,
-                shape = RoundedCornerShape(20.dp),
-                spotColor = SaharaColors.ShadowTint,
-                ambientColor = SaharaColors.ShadowTint
-            ),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SaharaColors.PureWhite)
+            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(18.dp)),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = SheGuardColors.SurfaceCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(14.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -348,16 +345,16 @@ fun SaharaContactCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(avatarColor),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = name.take(1).uppercase(),
-                        color = SaharaColors.PinkPrimary,
+                        color = SheGuardColors.Primary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = 16.sp
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -366,12 +363,12 @@ fun SaharaContactCard(
                         text = name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = SaharaColors.TextPrimary
+                        color = SheGuardColors.TextPrimary
                     )
                     Text(
                         text = relation,
                         style = MaterialTheme.typography.bodySmall,
-                        color = SaharaColors.TextSecondary
+                        color = SheGuardColors.TextSecondary
                     )
                 }
             }
@@ -381,8 +378,8 @@ fun SaharaContactCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "✕",
-                        color = SaharaColors.TextDisabled,
-                        fontSize = 16.sp,
+                        color = SheGuardColors.TextMuted,
+                        fontSize = 15.sp,
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable { onRemove() }
@@ -416,8 +413,8 @@ fun SaharaTimelineItem(
             text = time,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SaharaColors.TextSecondary,
-            modifier = Modifier.width(64.dp)
+            color = SheGuardColors.Primary,
+            modifier = Modifier.width(60.dp)
         )
 
         // Indicator Line Column
@@ -429,39 +426,39 @@ fun SaharaTimelineItem(
                 modifier = Modifier
                     .size(16.dp)
                     .clip(CircleShape)
-                    .background(if (isVerified) SaharaColors.SuccessGreen else SaharaColors.PinkPrimary),
+                    .background(if (isVerified) SheGuardColors.EmeraldSuccess else SheGuardColors.Primary),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(SaharaColors.PureWhite)
+                        .background(Color.White)
                 )
             }
             if (!isLast) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(36.dp)
-                        .background(SaharaColors.BorderSubtle)
+                        .height(34.dp)
+                        .background(SheGuardColors.BorderSubtle)
                 )
             }
         }
 
         // Event Details
-        Column(modifier = Modifier.weight(1f).padding(bottom = if (isLast) 0.dp else 16.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(bottom = if (isLast) 0.dp else 14.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = SaharaColors.TextPrimary
+                color = SheGuardColors.TextPrimary
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = SaharaColors.TextSecondary
+                    color = SheGuardColors.TextSecondary
                 )
             }
         }
@@ -483,14 +480,14 @@ fun SaharaSectionHeader(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = SaharaColors.TextPrimary
+            color = SheGuardColors.TextPrimary
         )
         if (subtitle != null) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = SaharaColors.TextSecondary
+                color = SheGuardColors.TextSecondary
             )
         }
     }
@@ -537,18 +534,24 @@ fun SaharaHoldToActivateButton(
         }
     }
 
+    val baseGradient = if (isDanger) {
+        Brush.horizontalGradient(listOf(Color(0xFFEF4444), Color(0xFFDC2626)))
+    } else {
+        Brush.horizontalGradient(listOf(Color(0xFFFB7185), Color(0xFFE11D48)))
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(60.dp)
             .shadow(
                 elevation = 6.dp,
-                shape = RoundedCornerShape(32.dp),
-                spotColor = if (isDanger) SaharaColors.DangerCoral else SaharaColors.PinkPrimary,
-                ambientColor = SaharaColors.ShadowTint
+                shape = RoundedCornerShape(18.dp),
+                spotColor = if (isDanger) SheGuardColors.RoseDanger else SheGuardColors.Primary,
+                ambientColor = SheGuardColors.ShadowTint
             )
-            .clip(RoundedCornerShape(32.dp))
-            .background(if (isDanger) SaharaColors.DangerCoral else SaharaColors.PinkPrimary)
+            .clip(RoundedCornerShape(18.dp))
+            .background(baseGradient)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -565,12 +568,9 @@ fun SaharaHoldToActivateButton(
             Box(
                 modifier = Modifier
                     .fillMaxWidth(progress)
-                    .height(64.dp)
+                    .height(60.dp)
                     .align(Alignment.CenterStart)
-                    .background(
-                        if (isDanger) Color(0xFFB71C1C).copy(alpha = 0.4f)
-                        else SaharaColors.PinkDeep.copy(alpha = 0.4f)
-                    )
+                    .background(Color(0xFF881337).copy(alpha = 0.35f))
             )
         }
 
@@ -579,41 +579,41 @@ fun SaharaHoldToActivateButton(
                 text = text,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = SaharaColors.TextInverse
+                color = Color.White
             )
             Text(
                 text = if (isHolding) "Keep holding..." else subtext,
                 style = MaterialTheme.typography.labelSmall,
-                color = SaharaColors.TextInverse.copy(alpha = 0.85f)
+                color = Color.White.copy(alpha = 0.9f)
             )
         }
     }
 }
 
 // =============================================================================
-// BREATHING CALM SAFETY VISUAL (STAR SCREEN)
+// SHEGUARD MODERN PINK & WHITE RADAR / SAFETY VISUAL
 // =============================================================================
 
 @Composable
 fun BreathingSafetyVisual(
-    statusText: String = "Safety Agent active",
+    statusText: String = "SheGuard Active",
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "breathing")
     val scale by infiniteTransition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
+        initialValue = 0.92f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = FastOutSlowInEasing),
+            animation = tween(2400, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "scale"
     )
     val alphaPulse by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.7f,
+        initialValue = 0.15f,
+        targetValue = 0.40f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = FastOutSlowInEasing),
+            animation = tween(2400, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "alpha"
@@ -621,70 +621,63 @@ fun BreathingSafetyVisual(
 
     Box(
         modifier = modifier
-            .size(200.dp)
-            .padding(16.dp),
+            .size(190.dp)
+            .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Outer pulsing aura
+        // Outer pulsing pink wave
         Box(
             modifier = Modifier
-                .size(170.dp)
+                .size(165.dp)
                 .scale(scale)
                 .clip(CircleShape)
-                .background(SaharaColors.VerySoftPink.copy(alpha = alphaPulse))
+                .background(SheGuardColors.PrimaryLight.copy(alpha = alphaPulse))
         )
 
-        // Middle soft blue aura
+        // Middle soft blush wave
         Box(
             modifier = Modifier
-                .size(130.dp)
+                .size(125.dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
-                        listOf(SaharaColors.SoftPink, SaharaColors.VerySoftBlue)
+                        listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E8))
                     )
                 )
+                .border(1.dp, Color(0xFFFDA4AF), CircleShape)
         )
 
-        // Core calm pearl
+        // Core Shield Center (Pure White Card)
         Box(
             modifier = Modifier
-                .size(90.dp)
-                .shadow(6.dp, CircleShape, spotColor = SaharaColors.PinkPrimary)
+                .size(85.dp)
+                .shadow(8.dp, CircleShape, spotColor = SheGuardColors.Primary)
                 .clip(CircleShape)
-                .background(SaharaColors.PureWhite),
+                .background(SheGuardColors.SurfaceCard)
+                .border(2.dp, SheGuardColors.PrimaryLight, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(SaharaColors.PinkPrimary)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "SAFE",
+                    text = "🛡️",
+                    fontSize = 24.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "ACTIVE",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     fontSize = 9.sp,
-                    color = SaharaColors.PinkPrimary,
+                    color = SheGuardColors.EmeraldSuccess,
                     letterSpacing = 1.sp
                 )
-                if (statusText.isNotBlank()) {
-                    Text(
-                        text = "●",
-                        fontSize = 6.sp,
-                        color = SaharaColors.SuccessGreen
-                    )
-                }
             }
         }
     }
 }
 
 // =============================================================================
-// BOTTOM NAVIGATION
+// BOTTOM NAVIGATION (Pink & White)
 // =============================================================================
 
 @Composable
@@ -703,14 +696,15 @@ fun SaharaBottomNav(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(12.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        colors = CardDefaults.cardColors(containerColor = SaharaColors.PureWhite)
+            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)),
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+        colors = CardDefaults.cardColors(containerColor = SheGuardColors.SurfaceCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp, horizontal = 16.dp),
+                .padding(vertical = 8.dp, horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -719,20 +713,21 @@ fun SaharaBottomNav(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .clickable { onSelectTab(tabName) }
+                        .background(if (isSelected) SheGuardColors.PrimaryContainer else Color.Transparent)
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = iconEmoji,
-                        fontSize = 20.sp
+                        fontSize = 18.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = tabName,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) SaharaColors.PinkPrimary else SaharaColors.TextSecondary
+                        color = if (isSelected) SheGuardColors.Primary else SheGuardColors.TextSecondary
                     )
                 }
             }
