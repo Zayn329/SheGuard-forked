@@ -89,30 +89,29 @@ By combining on-device ML, peer-to-peer mesh routing, multi-signal trust scoring
 
 SheGuard operates on a strict **3-Tier Offline-First Hierarchy**:
 
-```mermaid
-graph TD
-    subgraph Tier1 [Tier 1: Local Operation — Fundamental Guarantee]
-        A[Anonymous Micro-Reporting UI] --> B[(Room Local Persistence)]
-        C[On-Device TFLite Scream Classifier] --> B
-        B --> D[Spatio-Temporal Pattern Engine]
-        D --> E[Multi-Signal Trust Evaluator]
-        E --> F[Rising-Pattern Early Warning Alert]
-    end
-
-    subgraph Tier2 [Tier 2: Mesh Communication — Core MVP Capability]
-        B --> G[P2P Store & Forward Mesh Relay]
-        G <-->|BLE & Wi-Fi Direct| H[Nearby Peer Device 1]
-        G <-->|BLE & Wi-Fi Direct| I[Nearby Peer Device 2]
-    end
-
-    subgraph Tier3 [Tier 3: Backend Synchronization — Supporting Capability]
-        B -.->|When Online| J[FastAPI Backend Sync]
-        J -.-> K[Optional AI Legal Agent]
-    end
-
-    style Tier1 fill:#1a237e,stroke:#3949ab,color:#fff
-    style Tier2 fill:#004d40,stroke:#00897b,color:#fff
-    style Tier3 fill:#37474f,stroke:#78909c,color:#fff
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 1. LOCAL OPERATION (Fundamental Guarantee)                              │
+│    • Anonymous Micro-Reporting UI & Room Local Persistence               │
+│    • On-device TFLite Acoustic Scream Classifier                        │
+│    • Local Spatio-Temporal Pattern Engine & Trust Evaluator             │
+│    • Local Rising-Pattern Early Warning Generation                       │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 2. MESH COMMUNICATION (Core MVP Capability)                              │
+│    • P2P Store-and-Forward Mesh Relay via BLE / Wi-Fi Direct           │
+│    • Hop-count limited packet propagation across nearby devices          │
+│    • Operates 100% without Internet                                     │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ (When connection is restored)
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 3. BACKEND SYNCHRONIZATION (Supporting Capability)                     │
+│    • Asynchronous metadata sync with FastAPI backend                   │
+│    • Optional AI Legal Drafting Agent for formal complaint assistance   │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
