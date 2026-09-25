@@ -5,7 +5,9 @@
 > **Canonical Specifications:** `architecture.yaml` | `docs/SHEGUARD_PRD.md`
 
 ---
-
+prototype video link : 
+https://youtu.be/aliJ3QIUUYE?si=KzZkwFEaYftFlAyW
+---
 ## 🛡️ Executive Summary
 
 **SheGuard** is an offline-first intelligent safety companion and early warning system designed to protect individuals in high-risk, low-connectivity, or urban environments. By converting low-friction, anonymous micro-reports into verified spatio-temporal risk patterns and actionable community-level early warnings, SheGuard empowers communities without depending on continuous cloud connectivity, mobile data networks, or LLMs in the critical safety path.
