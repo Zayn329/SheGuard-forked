@@ -148,7 +148,7 @@ fun DetectionLogScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Acoustic scream & keyword classifiers will log live on-device inferences here.",
+                        text = "Acoustic scream and motion detectors will log live on-device inferences here.",
                         color = SheGuardColors.TextMuted,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 32.dp),

@@ -28,6 +28,7 @@ dependencies {
     implementation(project(":android:core:security"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.play.services.nearby)
 
     testImplementation(project(":android:core:testing"))
     testImplementation(libs.junit)

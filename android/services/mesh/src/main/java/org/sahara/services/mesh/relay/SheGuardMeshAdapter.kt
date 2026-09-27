@@ -7,6 +7,9 @@ import org.sahara.core.domain.repository.AlertRepository
 import org.sahara.services.mesh.models.MeshPacket
 import org.sahara.services.mesh.models.MeshPacketType
 import org.sahara.services.mesh.models.SheGuardMeshAlertPayload
+import org.sahara.services.mesh.transport.MeshPacketWireCodec
+import org.sahara.services.mesh.transport.MeshTransport
+import org.sahara.services.mesh.transport.MeshTransportResult
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Collections
@@ -36,7 +39,8 @@ class SheGuardMeshAdapter(
     val meshRelay: NearbyConnectionsMeshRelay = NearbyConnectionsMeshRelay(),
     val validator: MeshPayloadValidator = MeshPayloadValidator(),
     val alertRepository: AlertRepository? = null,
-    initialStatus: MeshStatus = MeshStatus.AVAILABLE
+    initialStatus: MeshStatus = MeshStatus.AVAILABLE,
+    val transport: MeshTransport? = null
 ) {
     @Volatile
     private var meshStatus: MeshStatus = initialStatus
@@ -121,7 +125,9 @@ class SheGuardMeshAdapter(
 
         outboundQueue.add(packet)
 
-        if (meshStatus == MeshStatus.AVAILABLE) {
+        if (transport != null) {
+            sendToConnectedPeers(packet)
+        } else if (meshStatus == MeshStatus.AVAILABLE) {
             meshRelay.processIncomingPacket(packet)
         }
 
@@ -132,6 +138,17 @@ class SheGuardMeshAdapter(
      * Drains the store-and-forward queue when mesh becomes available.
      */
     fun drainOutboundQueue(): List<MeshRelayResult> {
+        if (transport != null) {
+            val results = mutableListOf<MeshRelayResult>()
+            synchronized(outboundQueue) {
+                outboundQueue.toList().forEach { packet ->
+                    if (sendToConnectedPeers(packet) > 0) {
+                        results.add(MeshRelayResult.ACCEPTED_FOR_RELAY(packet))
+                    }
+                }
+            }
+            return results
+        }
         val results = mutableListOf<MeshRelayResult>()
         synchronized(outboundQueue) {
             val iterator = outboundQueue.iterator()
@@ -146,6 +163,31 @@ class SheGuardMeshAdapter(
     }
 
     fun getOutboundQueueSize(): Int = outboundQueue.size
+
+    /** Sends a wire packet to every currently connected Nearby endpoint. */
+    fun sendToConnectedPeers(packet: MeshPacket): Int {
+        val currentTransport = transport ?: return 0
+        val bytes = MeshPacketWireCodec.encode(packet)
+        var sentCount = 0
+        currentTransport.peers.value.forEach { peer ->
+            if (currentTransport.send(peer.endpointId, bytes) is MeshTransportResult.Accepted) {
+                sentCount++
+            }
+        }
+        if (sentCount > 0) {
+            synchronized(outboundQueue) {
+                outboundQueue.removeAll { it.packetId == packet.packetId }
+            }
+        }
+        return sentCount
+    }
+
+    /** Decodes and validates a packet received from the real transport. */
+    suspend fun handleIncomingWirePayload(bytes: ByteArray): SheGuardMeshProcessResult {
+        val packet = MeshPacketWireCodec.decode(bytes)
+            ?: return SheGuardMeshProcessResult.Rejected("Malformed mesh packet envelope")
+        return handleIncomingPacket(packet)
+    }
 
     /**
      * Handles an incoming packet received from a peer device over mesh.
@@ -167,6 +209,10 @@ class SheGuardMeshAdapter(
             return SheGuardMeshProcessResult.Rejected(validationResult.reason)
         }
         val validPayload = (validationResult as MeshValidationResult.Valid).payload
+
+        if (!packet.payloadHash.equals(computeSha256(packet.payloadText), ignoreCase = true)) {
+            return SheGuardMeshProcessResult.Rejected("Payload integrity hash mismatch")
+        }
 
         // 2. Relay deduplication & hop limit gate
         val relayResult = meshRelay.processIncomingPacket(packet)

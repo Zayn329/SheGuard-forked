@@ -120,13 +120,15 @@ store_and_forward:
 
 transport_limitations:
   implementation_state: >
-    The repository's NearbyConnectionsMeshRelay is an in-memory deterministic
-    relay and deduplication pipeline. It models hop limits, TTL eviction, and
-    deduplication accurately for unit tests and local simulation.
+    The repository now contains a Google Nearby Connections byte transport
+    implementation behind a transport boundary, while the deterministic
+    in-memory relay remains available for unit tests. Physical two-device
+    validation is still pending.
   physical_ble_binding: >
     Physical Google Play Services Nearby Connections API binding (BLE advertising/discovery)
-    requires physical Android hardware with Google Play Services enabled. The protocol
-    and adapter logic are verified via automated deterministic unit tests.
+    is implemented through NearbyConnectionsTransport and requires physical Android
+    hardware with Google Play Services enabled. Connection authentication and device
+    lifecycle behavior must be validated on the target demo devices.
 
 persistence:
   database_version: 5

@@ -469,7 +469,7 @@ fun QuickPreferencesScreen(
         ) {
             SaharaToggleCard(
                 title = "On-Device Distress Classifier",
-                description = "Runs local TFLite audio classification (screams, voice triggers) entirely offline.",
+                description = "Runs local TFLite scream classification entirely offline.",
                 checked = alwaysOnAgent,
                 onCheckedChange = { alwaysOnAgent = it }
             )
@@ -888,7 +888,7 @@ fun SafetyWatchScreen(
                 )
                 SaharaSafetyStatusCard(
                     title = "Distress Audio Engine",
-                    subtitle = "TFLite Scream & Keyword classifier high sensitivity",
+                    subtitle = "TFLite scream classifier high sensitivity",
                     stateText = "Attentive",
                     stateBadgeStyle = BadgeStyle.ACTIVE_PINK,
                     iconLetter = "🎙️"

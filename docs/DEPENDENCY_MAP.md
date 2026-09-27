@@ -79,7 +79,10 @@ The core safety guarantee functions strictly on-device without Internet, backend
   - Store-and-forward queueing if mesh disconnected
                │
                ▼
-[ NearbyConnectionsMeshRelay ] ──────────► [ Peer Device B ]
+[ MeshPacketWireCodec ]
+               │
+               ▼
+[ NearbyConnectionsTransport ] ──────────► [ Peer Device B ]
                                                     │
                                                     ▼
                                      [ MeshPayloadValidator ]
@@ -147,3 +150,41 @@ The core safety guarantee functions strictly on-device without Internet, backend
 6. **Mesh Transport Boundary**:
    - Mesh receives already-generated alerts; it NEVER generates alerts directly or alters local pattern trust scores.
    - Received mesh alerts are persisted as `isRelayed = true` community alerts and rendered with distinct source provenance.
+7. **Physical Transport Boundary**:
+   - `NearbyConnectionsTransport` owns Google Nearby Connections advertising,
+     discovery, connection callbacks, and byte payload delivery.
+   - `SheGuardMeshAdapter` remains transport-independent and accepts only decoded,
+     validated `MeshPacket` objects.
+   - `NearbyConnectionsMeshRelay` remains the deterministic in-memory test path;
+     physical two-device validation is still pending.
+
+## 4. Legacy Keyword Detection Disconnect (Current Runtime)
+
+Keyword detection belongs to the legacy distress-monitoring path, not the SheGuard
+core Report → Detect → Trust → Alert pipeline. The runtime dependency path is now:
+
+```
+[ AudioRecord PCM chunks ]
+          │
+          ├──► [ ScreamDetector ] ──► [ SignalFusionEngine ] ──► [ IncidentStateMachine ]
+          │                              │
+          └──► [ Evidence pre-roll ]     └──► [ DetectionLogManager ]
+
+[ KeywordDetector / Speech Commands TFLite ]  (DISCONNECTED / DORMANT)
+```
+
+The foreground service no longer initializes the speech-command model, invokes
+`KeywordDetector.processAudioChunk`, collects its `detectionFlow`, or logs keyword
+signals. `SignalFusionEngine` and the detector implementation still contain the
+legacy keyword contract so this change remains reversible; no production runtime
+edge currently supplies keyword signals.
+
+Permanent removal plan:
+
+1. Remove the dormant `KeywordDetector` implementation and speech-command TFLite
+   classifier/assets after downstream legacy tests and contracts are migrated.
+2. Remove keyword branches and thresholds from `DetectionConfig` and
+   `SignalFusionEngine` only after confirming no supported incident flow depends on
+   them.
+3. Remove `DetectorType.KEYWORD` and historical keyword-only fixtures from tests,
+   backend examples, and API/ADR documentation in a separately reviewed cleanup.

@@ -23,7 +23,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.sahara.core.domain.models.IncidentState
 import org.sahara.features.incident.statemachine.IncidentStateMachine
-import org.sahara.services.detection.detectors.KeywordDetector
 import org.sahara.services.detection.detectors.MotionDetector
 import org.sahara.services.detection.detectors.ScreamDetector
 import org.sahara.services.detection.fusion.SignalFusionEngine
@@ -43,7 +42,6 @@ class SafetyForegroundService : Service(), SensorEventListener {
 
     // Real audio & sensor detection infrastructure
     private val detectionConfig = DetectionConfig()
-    val keywordDetector = KeywordDetector(detectionConfig)
     val screamDetector = ScreamDetector(detectionConfig)
     val motionDetector = MotionDetector(detectionConfig)
     val fusionEngine = SignalFusionEngine(detectionConfig)
@@ -80,15 +78,6 @@ class SafetyForegroundService : Service(), SensorEventListener {
         super.onCreate()
         createNotificationChannel()
 
-        // Initialize TFLite Speech Commands Classifier from application assets
-        try {
-            val speechClassifier = org.sahara.services.detection.tflite.TFLiteSpeechCommandsClassifier(applicationContext)
-            keywordDetector.tfliteClassifier = speechClassifier
-            android.util.Log.d("SaharaDetection", "TFLite Speech Commands Classifier initialized. Loaded=${speechClassifier.isModelLoaded}, Version=${speechClassifier.modelVersion}")
-        } catch (e: Throwable) {
-            android.util.Log.w("SaharaDetection", "Failed to load TFLite Speech Commands Classifier: ${e.message}")
-        }
-
         // Initialize TFLite Scream Classifier from application assets
         try {
             val classifier = org.sahara.services.detection.tflite.TFLiteScreamClassifier(applicationContext)
@@ -107,12 +96,6 @@ class SafetyForegroundService : Service(), SensorEventListener {
         startAudioRecording()
 
         // Launch detection signal collection & fusion processing
-        serviceScope.launch {
-            keywordDetector.detectionFlow.collect { signal ->
-                fusionEngine.onSignalReceived(signal)
-                org.sahara.services.detection.log.DetectionLogManager.logEvent(signal, latestAudioBuffer)
-            }
-        }
         serviceScope.launch {
             screamDetector.detectionFlow.collect { signal ->
                 fusionEngine.onSignalReceived(signal)
@@ -211,11 +194,10 @@ class SafetyForegroundService : Service(), SensorEventListener {
                             evidenceCaptureEngine?.preRollBuffer?.offerChunk(chunk)
 
                             latestAudioBuffer = buffer.clone()
-                            val kwConf = keywordDetector.processAudioChunk(buffer, sampleRate)
                             val screamConf = screamDetector.processAudioChunk(buffer, sampleRate)
 
                             if (chunkIndex % 50 == 0) { // Log diagnostic summary every ~5 seconds
-                                android.util.Log.d("SaharaDetection", "Audio chunk #$chunkIndex processed. kW_conf=%.2f, scream_conf=%.2f (mode=${screamDetector.modeStatus})".format(kwConf, screamConf))
+                                android.util.Log.d("SaharaDetection", "Audio chunk #$chunkIndex processed. scream_conf=%.2f (mode=${screamDetector.modeStatus})".format(screamConf))
                             }
 
                             // If active incident, save real encrypted chunk
@@ -259,7 +241,7 @@ class SafetyForegroundService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification("Sahara Safety Monitoring Active", "Listening for distress keywords, screams, or impacts...")
+        val notification = createNotification("Sahara Safety Monitoring Active", "Listening for screams or impacts...")
         startForeground(NOTIFICATION_ID, notification)
         return START_STICKY
     }
@@ -271,7 +253,7 @@ class SafetyForegroundService : Service(), SensorEventListener {
         when (state) {
             IncidentState.MONITORING -> {
                 title = "Sahara Monitoring Active"
-                content = "Listening for distress keywords, screams, or impacts..."
+                content = "Listening for screams or impacts..."
             }
             IncidentState.CANDIDATE_INCIDENT, IncidentState.PENDING_CONFIRMATION -> {
                 title = "Possible Distress Detected"
@@ -334,7 +316,6 @@ class SafetyForegroundService : Service(), SensorEventListener {
 
         try {
             screamDetector.tfliteClassifier?.close()
-            keywordDetector.tfliteClassifier?.close()
         } catch (_: Throwable) {}
 
         sensorManager?.unregisterListener(this)

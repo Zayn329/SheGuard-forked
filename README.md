@@ -4,11 +4,10 @@
 > **Domain:** Women Safety & Social Impact — Preventive & Community Safety
 > **Canonical Specifications:** `architecture.yaml` | `docs/SHEGUARD_PRD.md`
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Android%2014%2B-green.svg)](https://developer.android.com)
-[![Language](https://img.shields.io/badge/Kotlin-1.9.22-purple.svg)](https://kotlinlang.org)
-[![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20Clean%20MVVM-orange.svg)](architecture.yaml)
-
+---
+prototype video link : 
+https://youtu.be/aliJ3QIUUYE?si=KzZkwFEaYftFlAyW
+---
 ## 🛡️ Executive Summary
 
 **SheGuard** is an offline-first intelligent safety companion and early warning system designed to protect individuals in high-risk, low-connectivity, or urban environments. By converting low-friction, anonymous micro-reports into verified spatio-temporal risk patterns and actionable community-level early warnings, SheGuard empowers communities without depending on continuous cloud connectivity, mobile data networks, or LLMs in the critical safety path.

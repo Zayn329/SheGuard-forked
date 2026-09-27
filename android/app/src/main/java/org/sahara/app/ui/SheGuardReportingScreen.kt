@@ -38,7 +38,6 @@ import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.models.TrustLevel
 import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.core.domain.repository.PatternRepository
-import org.sahara.services.mesh.relay.MeshStatus
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 import java.text.SimpleDateFormat
 import java.util.*
@@ -60,11 +59,15 @@ fun SheGuardReportingScreen(
     var approximateArea by remember { mutableStateOf("Dadated Street / Mumbai Central") }
     var showConfirmation by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
-    var isMeshAvailable by remember { mutableStateOf(true) }
 
     val actualMeshAdapter = meshAdapter ?: remember(alertRepository) {
         SheGuardMeshAdapter(alertRepository = alertRepository)
     }
+    val transportStatusState = actualMeshAdapter.transport?.status?.collectAsState()
+    val transportStatus = transportStatusState?.value
+    val peerState = actualMeshAdapter.transport?.peers?.collectAsState()
+    val peerCount = peerState?.value?.size ?: 0
+    val isMeshConnected = transportStatus == org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTED
 
     val reportsState by repository.getAllReports().collectAsState(initial = emptyList())
     val persistedAlerts by (alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList())
@@ -170,10 +173,10 @@ fun SheGuardReportingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(if (isMeshAvailable) SheGuardColors.EmeraldBg else SheGuardColors.SurfaceElevated)
+                    .background(if (isMeshConnected) SheGuardColors.EmeraldBg else SheGuardColors.SurfaceElevated)
                     .border(
                         1.dp,
-                        if (isMeshAvailable) SheGuardColors.EmeraldBorder else SheGuardColors.BorderSubtle,
+                        if (isMeshConnected) SheGuardColors.EmeraldBorder else SheGuardColors.BorderSubtle,
                         RoundedCornerShape(14.dp)
                     )
                     .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -185,33 +188,13 @@ fun SheGuardReportingScreen(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(if (isMeshAvailable) SheGuardColors.EmeraldSuccess else SheGuardColors.TextMuted)
+                            .background(if (isMeshConnected) SheGuardColors.EmeraldSuccess else SheGuardColors.TextMuted)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isMeshAvailable) "Mesh Relay: P2P Active" else "Mesh: Offline (Local Mode)",
-                        color = if (isMeshAvailable) SheGuardColors.EmeraldText else SheGuardColors.TextSecondary,
+                        text = if (isMeshConnected) "Mesh Relay: Connected ($peerCount)" else "Mesh: ${transportStatus?.name ?: "LOCAL_ONLY"}",
+                        color = if (isMeshConnected) SheGuardColors.EmeraldText else SheGuardColors.TextSecondary,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SheGuardColors.SurfaceCard)
-                        .border(1.dp, if (isMeshAvailable) SheGuardColors.EmeraldBorder else SheGuardColors.BorderSubtle, RoundedCornerShape(10.dp))
-                        .clickable {
-                            isMeshAvailable = !isMeshAvailable
-                            actualMeshAdapter.setMeshStatus(
-                                if (isMeshAvailable) MeshStatus.AVAILABLE else MeshStatus.UNAVAILABLE
-                            )
-                        }
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = if (isMeshAvailable) "Simulate Offline" else "Enable Mesh",
-                        color = if (isMeshAvailable) SheGuardColors.EmeraldText else SheGuardColors.Primary,
-                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
