@@ -1737,7 +1737,7 @@ fun ExportVerifierScreen(
                         Text(text = it, color = SheGuardColors.RoseText, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = exportPackage.summaryText, style = MaterialTheme.typography.bodySmall, color = Color.White)
+                    Text(text = exportPackage.summaryText, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary)
                 }
             }
         } else {
@@ -1928,7 +1928,7 @@ fun LegalDraftingScreen(onBack: () -> Unit) {
                         color = SheGuardColors.AmberText
                     )
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = generatedDraft!!, fontSize = 12.sp, lineHeight = 18.sp, color = Color.White)
+                    Text(text = generatedDraft!!, fontSize = 12.sp, lineHeight = 18.sp, color = SheGuardColors.TextPrimary)
                 }
             }
         }
