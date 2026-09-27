@@ -4,7 +4,10 @@
 > **Domain:** Women Safety & Social Impact — Preventive & Community Safety
 > **Canonical Specifications:** `architecture.yaml` | `docs/SHEGUARD_PRD.md`
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Android%2014%2B-green.svg)](https://developer.android.com)
+[![Language](https://img.shields.io/badge/Kotlin-1.9.22-purple.svg)](https://kotlinlang.org)
+[![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20Clean%20MVVM-orange.svg)](architecture.yaml)
 
 ## 🛡️ Executive Summary
 
@@ -231,3 +234,65 @@ poetry run pytest
 - **Problem Statement:** CX1001 (Women Safety & Social Impact — Preventive & Community Safety)
 - **Highest Technical Authority:** `architecture.yaml`
 - **Canonical Product Contract:** `docs/SHEGUARD_PRD.md`
+## 🛡️ Privacy & Security Policy
+
+SheGuard is built with privacy and security as foundational engineering requirements:
+
+* **Zero Location Tracking:** SheGuard does NOT record or maintain continuous background GPS tracking histories. Location coordinates are attached strictly to micro-reports or active panic activations.
+* **On-Device Audio Isolation:** Audio processed by the TFLite Acoustic Scream Classifier is evaluated in rolling volatile memory (RAM) frames. Raw audio is never saved to persistent storage unless an active distress incident is explicitly triggered.
+* **Cryptographic Hardware Isolation:** Encryption keys are generated inside the Android Keystore Trusted Execution Environment (TEE) / StrongBox and never leave the hardware module.
+* **Anonymous Tokens:** User identities are decoupled from safety reports via cryptographically rotated pseudo-random reporter tokens.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from the open-source community to advance personal safety technology!
+
+1. **Fork the Repository** and create a feature branch (`git checkout -b feature/amazing-feature`).
+2. **Adhere to standard Kotlin & Clean Architecture guidelines** enforced in `architecture.yaml`.
+3. **Ensure Unit Tests Pass:** Run `./gradlew test` before opening a pull request.
+4. **Commit Your Changes:** Follow conventional commit messages (`feat:`, `fix:`, `docs:`).
+5. **Open a Pull Request:** Describe the problem solved and link relevant issues.
+
+---
+
+## 📜 License & Legal Disclaimers
+
+### Open Source License
+SheGuard is released under the **MIT License**.
+
+```text
+Copyright (c) 2026 Team Aegis (Problem Statement CX1001)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Safety & Legal Disclaimers
+
+1. **Early Warning Community Signals:** SheGuard pattern alerts are community-driven early warning risk signals generated algorithmically from anonymous local reports and nearby mesh peers. SheGuard **does not guarantee emergency service, police dispatch, or physical protection**. In immediate danger, users should always contact local emergency services (e.g., 112 / 911) directly if reachable.
+2. **Cryptographic Evidence Auditability:** The SHA-256 Merkle root and Keystore ECDSA signature included in exported evidence packages verify technical integrity (confirming data has not been modified since sealing). Technical verification **does not guarantee court admissibility or law enforcement acceptance**. Users should consult legal counsel regarding formal evidentiary submissions.
+
+---
+
+## ✉️ Team Aegis & Contact
+
+* **Team Name:** Aegis
+* **Problem Statement:** CX1001 (`teamAegis_CX1001_codex2026`)
+* **Target Identity:** SheGuard — Preventive & Community Safety
