@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,8 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import org.sahara.app.export.EvidenceExporter
 import org.sahara.app.export.ExportPackage
 import org.sahara.app.ui.ActiveIncidentScreen
@@ -52,6 +55,9 @@ import org.sahara.core.data.repository.PatternRepositoryImpl
 import org.sahara.features.notifycircle.manager.NotifyCircleManager
 import org.sahara.services.mesh.fallback.EscalationFallbackManager
 import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
+import org.sahara.services.mesh.relay.SheGuardMeshAdapter
+import org.sahara.services.mesh.transport.MeshPermissionManager
+import org.sahara.services.mesh.transport.NearbyConnectionsTransport
 import org.sahara.core.domain.models.Incident
 import org.sahara.core.domain.models.IncidentState
 import org.sahara.core.security.crypto.AesGcmFileStorage
@@ -102,9 +108,19 @@ class MainActivity : ComponentActivity() {
     private lateinit var captureEngine: EvidenceCaptureEngine
     private lateinit var manifestManager: EvidenceManifestManager
     private lateinit var preRollBuffer: BoundedAudioPreRollBuffer
+    private lateinit var meshTransport: NearbyConnectionsTransport
+    private lateinit var sheGuardMeshAdapter: SheGuardMeshAdapter
 
     private var foregroundService: SafetyForegroundService? = null
     private var isServiceBound = false
+
+    private val meshPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.all { it }) {
+            startMeshTransport()
+        }
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -150,6 +166,26 @@ class MainActivity : ComponentActivity() {
         manifestManager = EvidenceManifestManager(incidentRepository, keyManager)
 
         val meshRelay = NearbyConnectionsMeshRelay()
+        meshTransport = NearbyConnectionsTransport(applicationContext)
+        sheGuardMeshAdapter = SheGuardMeshAdapter(
+            meshRelay = meshRelay,
+            alertRepository = alertRepository,
+            transport = meshTransport
+        )
+        lifecycleScope.launch {
+            meshTransport.incomingPayloads.collect { bytes ->
+                sheGuardMeshAdapter.handleIncomingWirePayload(bytes)
+            }
+        }
+        lifecycleScope.launch {
+            meshTransport.status.collect { status ->
+                if (status == org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTED) {
+                    sheGuardMeshAdapter.drainOutboundQueue()
+                }
+            }
+        }
+        startMeshTransport()
+
         val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
         val fallbackManager = EscalationFallbackManager(meshRelay, smsProvider, isDebug = true)
         val notifyCircleManager = NotifyCircleManager(contactRepository, auditRepository, fallbackManager)
@@ -307,6 +343,7 @@ class MainActivity : ComponentActivity() {
                     repository = microReportRepository,
                     patternRepository = patternRepository,
                     alertRepository = alertRepository,
+                    meshAdapter = sheGuardMeshAdapter,
                     onBack = { currentScreen = Screen.HOME }
                 )
             }
@@ -440,9 +477,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::meshTransport.isInitialized) {
+            meshTransport.stop()
+        }
         if (isServiceBound) {
             unbindService(serviceConnection)
             isServiceBound = false
         }
+    }
+
+    private fun startMeshTransport() {
+        if (!::meshTransport.isInitialized) return
+        val missing = MeshPermissionManager.missingPermissions(this)
+        if (missing.isNotEmpty()) {
+            meshPermissionLauncher.launch(missing)
+            return
+        }
+        meshTransport.startAdvertising()
+        meshTransport.startDiscovery()
     }
 }

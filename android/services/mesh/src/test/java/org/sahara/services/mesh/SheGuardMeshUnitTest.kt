@@ -27,6 +27,7 @@ import org.sahara.services.mesh.relay.MeshValidationResult
 import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 import org.sahara.services.mesh.relay.SheGuardMeshProcessResult
+import org.sahara.services.mesh.transport.MeshPacketWireCodec
 import java.util.UUID
 
 /**
@@ -439,5 +440,29 @@ class SheGuardMeshUnitTest {
         assertTrue(r2 is SheGuardMeshProcessResult.DuplicateIgnored)
         assertTrue(r3 is SheGuardMeshProcessResult.DuplicateIgnored)
         assertEquals(1, fakeAlertRepo.alerts.size)
+    }
+
+    @Test
+    fun test24_packetWireCodecRoundTripsEnvelope() {
+        val packet = adapter.createPacketForAlert(createSampleAlert())
+
+        val decoded = MeshPacketWireCodec.decode(MeshPacketWireCodec.encode(packet))
+
+        assertEquals(packet, decoded)
+    }
+
+    @Test
+    fun test25_malformedWireEnvelopeIsRejected() {
+        assertNull(MeshPacketWireCodec.decode("not-a-sheguard-packet".toByteArray()))
+    }
+
+    @Test
+    fun test26_payloadHashMismatchIsRejected() = runBlocking {
+        val packet = adapter.createPacketForAlert(createSampleAlert()).copy(payloadHash = "00")
+
+        val result = adapter.handleIncomingPacket(packet)
+
+        assertTrue(result is SheGuardMeshProcessResult.Rejected)
+        assertTrue((result as SheGuardMeshProcessResult.Rejected).reason.contains("hash mismatch"))
     }
 }

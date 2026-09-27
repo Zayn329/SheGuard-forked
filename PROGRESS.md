@@ -85,6 +85,16 @@
 
 ## Remaining Work
 
+### Phase 5A — Real Nearby Connections Transport [IN PROGRESS]
+- [x] Added `MeshTransport` boundary and Nearby byte payload codec
+- [x] Added `NearbyConnectionsTransport` advertising/discovery/connection/send path
+- [x] Added runtime permission helper and app lifecycle wiring
+- [x] Connected real transport bytes to `SheGuardMeshAdapter`
+- [x] Replaced reporting-screen mesh simulation toggle with live transport status
+- [ ] Verify compile after dependency download completes
+- [ ] Verify two physical Android devices exchange a SheGuard alert offline
+- [ ] Add connection authentication UX and production lifecycle hardening
+
 ### Phase 5 — MESH: Offline Device-to-Device Relay [COMPLETED]
 - [x] Extended `MeshPacketType` enum with `SHEGUARD_ALERT` (`MeshPacket.kt`)
 - [x] Created `SheGuardMeshAlertPayload.kt` — relay-safe JSON serializable model (no PII, coarse location only)

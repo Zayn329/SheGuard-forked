@@ -59,7 +59,7 @@ SheGuard/
 
 | Module | Key Files | Responsibility |
 |---|---|---|
-| `:android:services:mesh` | `NearbyConnectionsMeshRelay.kt`<br>`MeshDeduplicationCache.kt`<br>`MeshPacket`<br>`SheGuardMeshAdapter.kt`<br>`SheGuardMeshAlertPayload.kt`<br>`MeshPayloadValidator.kt` | Peer-to-peer packet propagation over BLE / Wi-Fi Direct using Google Nearby Connections abstractions. Handles payload serialization, deterministic validation, deduplication, hop limits (max 12), store-and-forward queuing, and safe community alert relay. |
+| `:android:services:mesh` | `NearbyConnectionsTransport.kt`<br>`MeshTransport.kt`<br>`MeshPacketWireCodec.kt`<br>`MeshPermissionManager.kt`<br>`SheGuardMeshAdapter.kt`<br>`MeshPayloadValidator.kt`<br>`MeshDeduplicationCache.kt` | Real Google Nearby Connections byte transport plus deterministic in-memory test relay. Handles advertising/discovery, connection state, permissions, bounded payload encoding, validation, deduplication, hop limits (max 12), store-and-forward queuing, and safe community alert relay. |
 
 ### C. Supporting & Security Modules
 
@@ -67,7 +67,7 @@ SheGuard/
 |---|---|---|
 | `:android:core:security` | `KeyStorageManagerImpl.kt`<br>`AesGcmFileStorage.kt`<br>`MerkleTree.kt` | Hardware-backed Android Keystore key management, AES-256-GCM file encryption, SHA-256 Merkle tree evidence integrity. |
 | `:android:services:evidence` | `EvidenceCollectionManager.kt`<br>`EncryptedChunkManager.kt` | Incident evidence capture, chunking, cryptographic hashing, and local sealing. |
-| `:android:services:detection` | `KeywordDetector.kt`<br>`ScreamDetector.kt`<br>`MotionDetector.kt` | Optional on-device ML distress signal fusion using TensorFlow Lite. |
+| `:android:services:detection` | `ScreamDetector.kt`<br>`MotionDetector.kt`<br>`KeywordDetector` (dormant) | Optional on-device distress signal fusion using TensorFlow Lite. Keyword detection is currently disconnected from the runtime service and detection log; its implementation remains only for reversible cleanup and legacy tests. |
 | `:android:features:panic` | `PanicController.kt` | Manual SOS trigger and hardware volume-button sequence monitor. |
 | `:android:features:incident` | `IncidentStateMachine.kt` | Controlled 11-state incident lifecycle management. |
 | `:android:features:notify-circle` | `NotifyCircleManager.kt`<br>`EscalationFallbackManager.kt` | Trusted emergency contacts and fallback SMS delivery. |
