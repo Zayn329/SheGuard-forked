@@ -95,4 +95,35 @@ class NotifyCircleUnitTest {
         val aliceRecord = updatedRecords.find { it.contactId == contactWithLoc.contactId }
         assertEquals(ContactDeliveryState.ACKNOWLEDGED, aliceRecord?.state)
     }
+
+    @Test
+    fun testOnIncidentActivatedTriggersDispatchAlert() = runBlocking {
+        val contact = NotifyContact(
+            displayName = "Emergency Contact",
+            type = ContactType.SMS_ONLY,
+            phoneNumber = "+99999999"
+        )
+        circleManager.addContact(contact)
+
+        val incidentId = UUID.randomUUID()
+        var dispatchCalled = false
+
+        val onIncidentActivated: (UUID) -> Unit = { id ->
+            runBlocking {
+                val records = circleManager.dispatchAlert(
+                    incidentId = id,
+                    locationText = "Location A",
+                    locationAgeSeconds = 0,
+                    evidenceHash = "hash_test",
+                    referenceCode = "REF_TEST"
+                )
+                dispatchCalled = records.isNotEmpty()
+            }
+        }
+
+        onIncidentActivated(incidentId)
+
+        assertTrue("onIncidentActivated must trigger NotifyCircleManager dispatchAlert", dispatchCalled)
+        assertEquals(1, circleManager.getDeliveryRecords().size)
+    }
 }

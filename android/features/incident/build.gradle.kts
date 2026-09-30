@@ -27,6 +27,8 @@ dependencies {
     implementation(project(":android:core:data"))
     implementation(project(":android:services:detection"))
     implementation(project(":android:services:evidence"))
+    implementation(project(":android:features:notify-circle"))
+    implementation(project(":android:services:mesh"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.lifecycle.runtime.ktx)

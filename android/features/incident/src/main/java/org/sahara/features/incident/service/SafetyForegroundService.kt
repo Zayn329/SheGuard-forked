@@ -33,12 +33,19 @@ import org.sahara.services.evidence.preroll.BoundedAudioPreRollBuffer
 
 import org.sahara.core.data.db.SaharaDatabase
 import org.sahara.core.data.repository.AuditRepositoryImpl
+import org.sahara.core.data.repository.ContactRepositoryImpl
 import org.sahara.core.data.repository.IncidentRepositoryImpl
+import org.sahara.features.notifycircle.manager.NotifyCircleManager
+import org.sahara.services.mesh.fallback.EscalationFallbackManager
+import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
+import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 
 class SafetyForegroundService : Service(), SensorEventListener {
 
     private val binder = LocalBinder()
     var stateMachine: IncidentStateMachine? = null
+    var notifyCircleManager: NotifyCircleManager? = null
+    var sheGuardMeshAdapter: SheGuardMeshAdapter? = null
 
     // Real audio & sensor detection infrastructure
     private val detectionConfig = DetectionConfig()
@@ -146,6 +153,24 @@ class SafetyForegroundService : Service(), SensorEventListener {
         }
     }
 
+    fun getOrCreateNotifyCircleManager(): NotifyCircleManager {
+        if (notifyCircleManager == null) {
+            val db = SaharaDatabase.getDatabase(applicationContext)
+            val contactRepo = ContactRepositoryImpl(db.notifyContactDao())
+            val auditRepo = AuditRepositoryImpl(db.auditEventDao())
+            val meshRelay = sheGuardMeshAdapter?.meshRelay ?: NearbyConnectionsMeshRelay()
+            val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
+            val fallbackManager = EscalationFallbackManager(
+                meshRelay = meshRelay,
+                smsProvider = smsProvider,
+                isDebug = true,
+                meshAdapter = sheGuardMeshAdapter
+            )
+            notifyCircleManager = NotifyCircleManager(contactRepo, auditRepo, fallbackManager)
+        }
+        return notifyCircleManager!!
+    }
+
     fun getOrCreateStateMachine(): IncidentStateMachine {
         if (stateMachine == null) {
             val db = SaharaDatabase.getDatabase(applicationContext)
@@ -153,10 +178,35 @@ class SafetyForegroundService : Service(), SensorEventListener {
             val auditRepo = AuditRepositoryImpl(db.auditEventDao())
             stateMachine = IncidentStateMachine(incRepo, auditRepo)
         }
-        stateMachine?.onStateChanged = { newState ->
+        val sm = stateMachine!!
+        sm.onStateChanged = { newState ->
             fusionEngine.updateCurrentState(newState)
         }
-        return stateMachine!!
+        if (sm.onIncidentActivated == null) {
+            sm.onIncidentActivated = { incident ->
+                try {
+                    evidenceCaptureEngine?.processBufferedPreRoll(incident.incidentId)
+                } catch (e: Throwable) {
+                    android.util.Log.e("Sahara", "Pre-roll capture error in service: ${e.message}")
+                }
+                try {
+                    val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
+                    val manager = getOrCreateNotifyCircleManager()
+                    serviceScope.launch {
+                        manager.dispatchAlert(
+                            incidentId = incident.incidentId,
+                            locationText = "Background Distress Location",
+                            locationAgeSeconds = 0,
+                            evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
+                            referenceCode = refCode
+                        )
+                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("Sahara", "Notification dispatch error in service: ${e.message}")
+                }
+            }
+        }
+        return sm
     }
 
     private fun startAudioRecording() {

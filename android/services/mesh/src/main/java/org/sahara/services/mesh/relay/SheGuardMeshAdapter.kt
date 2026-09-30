@@ -212,7 +212,12 @@ class SheGuardMeshAdapter(
             return when (relayResult) {
                 is MeshRelayResult.DUPLICATE_IGNORED -> SheGuardMeshProcessResult.DuplicateIgnored(packet.packetId)
                 is MeshRelayResult.HOP_LIMIT_EXCEEDED -> SheGuardMeshProcessResult.HopLimitExceeded(packet.packetId)
-                is MeshRelayResult.ACCEPTED_FOR_RELAY -> SheGuardMeshProcessResult.DistressRelayed(relayResult.forwardedPacket)
+                is MeshRelayResult.ACCEPTED_FOR_RELAY -> {
+                    if (transport != null) {
+                        sendToConnectedPeers(relayResult.forwardedPacket)
+                    }
+                    SheGuardMeshProcessResult.DistressRelayed(relayResult.forwardedPacket)
+                }
             }
         }
 
