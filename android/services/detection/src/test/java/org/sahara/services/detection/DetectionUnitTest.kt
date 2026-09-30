@@ -188,4 +188,36 @@ class DetectionUnitTest {
         logManager.clearLogs()
         assertEquals(0, logManager.events.value.size)
     }
+
+    @Test
+    fun testFusionDecisionMapsToMicroReportAndCandidatePattern() = runBlocking {
+        val screamSignal = SignalResult(DetectorType.SCREAM, 0.90f, "scream", System.currentTimeMillis())
+        val motionSignal = SignalResult(DetectorType.MOTION, 0.85f, "impact", System.currentTimeMillis())
+
+        val confirmDecision = FusionDecision.ConfirmIncident(listOf(screamSignal, motionSignal))
+        assertTrue(confirmDecision.activeSignals.size == 2)
+
+        val category = org.sahara.core.domain.models.ReportCategory.SUSPICIOUS_ACTIVITY
+        val microReport = org.sahara.core.domain.models.MicroReport(
+            anonymousReporterToken = "sensor_node_test",
+            category = category,
+            latitude = 19.0760,
+            longitude = 72.8777,
+            approximateArea = "Bandra West / Mumbai Central",
+            contextDescription = "Automated Sensor Fusion Signal: Scream (conf: 0.90), Impact (conf: 0.85)"
+        )
+
+        val secondReport = microReport.copy(
+            reportId = java.util.UUID.randomUUID(),
+            anonymousReporterToken = "sensor_node_test2",
+            timestamp = System.currentTimeMillis() + 1000L
+        )
+
+        val patternEngine = org.sahara.core.domain.engine.SpatioTemporalPatternEngine()
+        val candidatePatterns = patternEngine.detectCandidatePatterns(listOf(microReport, secondReport))
+
+        assertEquals(1, candidatePatterns.size)
+        assertEquals(org.sahara.core.domain.models.ReportCategory.SUSPICIOUS_ACTIVITY, candidatePatterns[0].category)
+        assertEquals(2, candidatePatterns[0].reportCount)
+    }
 }

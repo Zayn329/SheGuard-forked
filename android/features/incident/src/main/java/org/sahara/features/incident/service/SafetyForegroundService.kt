@@ -32,9 +32,18 @@ import org.sahara.services.evidence.preroll.AudioChunk
 import org.sahara.services.evidence.preroll.BoundedAudioPreRollBuffer
 
 import org.sahara.core.data.db.SaharaDatabase
+import kotlinx.coroutines.flow.first
 import org.sahara.core.data.repository.AuditRepositoryImpl
 import org.sahara.core.data.repository.ContactRepositoryImpl
 import org.sahara.core.data.repository.IncidentRepositoryImpl
+import org.sahara.core.data.repository.MicroReportRepositoryImpl
+import org.sahara.core.data.repository.PatternRepositoryImpl
+import org.sahara.core.domain.engine.SpatioTemporalPatternEngine
+import org.sahara.core.domain.engine.TrustAndAntiGamingEvaluator
+import org.sahara.core.domain.models.DetectorType
+import org.sahara.core.domain.models.MicroReport
+import org.sahara.core.domain.models.ReportCategory
+import org.sahara.core.domain.models.SyncStatus
 import org.sahara.features.notifycircle.manager.NotifyCircleManager
 import org.sahara.services.mesh.fallback.EscalationFallbackManager
 import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
@@ -129,10 +138,12 @@ class SafetyForegroundService : Service(), SensorEventListener {
                         activeSm.onSuspiciousSignalDetected(decision.primarySignal.detectorType.name)
                         activeSm.transitionToCandidate()
                         updateNotificationForState(IncidentState.CANDIDATE_INCIDENT)
+                        bridgeFusionDecisionToMicroReport(listOf(decision.primarySignal))
                     }
                     is org.sahara.services.detection.fusion.FusionDecision.ConfirmIncident -> {
                         activeSm.activateIncident(decision.activeSignals.joinToString { it.detectorType.name })
                         updateNotificationForState(IncidentState.ACTIVE_INCIDENT)
+                        bridgeFusionDecisionToMicroReport(decision.activeSignals)
                     }
                     is org.sahara.services.detection.fusion.FusionDecision.CandidateExpired -> {
                         if (activeSm.currentState.value != IncidentState.ACTIVE_INCIDENT && activeSm.currentState.value != IncidentState.SEALED) {
@@ -149,6 +160,45 @@ class SafetyForegroundService : Service(), SensorEventListener {
             while (true) {
                 kotlinx.coroutines.delay(1000)
                 fusionEngine.checkConfirmationTimeout(System.currentTimeMillis())
+            }
+        }
+    }
+
+    private fun bridgeFusionDecisionToMicroReport(signals: List<org.sahara.services.detection.models.SignalResult>) {
+        if (signals.isEmpty()) return
+        serviceScope.launch {
+            try {
+                val db = SaharaDatabase.getDatabase(applicationContext)
+                val microReportRepo = MicroReportRepositoryImpl(db.microReportDao())
+                val patternRepo = PatternRepositoryImpl(db.patternDao())
+                val patternEngine = SpatioTemporalPatternEngine()
+                val trustEvaluator = TrustAndAntiGamingEvaluator()
+
+                val category = when {
+                    signals.any { it.detectorType == DetectorType.SCREAM } -> ReportCategory.SUSPICIOUS_ACTIVITY
+                    signals.any { it.detectorType == DetectorType.MOTION } -> ReportCategory.HARASSMENT
+                    else -> ReportCategory.SUSPICIOUS_ACTIVITY
+                }
+
+                val microReport = MicroReport(
+                    anonymousReporterToken = "sensor_node_${java.util.UUID.randomUUID().toString().take(8)}",
+                    category = category,
+                    latitude = 19.0760,
+                    longitude = 72.8777,
+                    approximateArea = "Bandra West / Mumbai Central",
+                    contextDescription = "Automated Sensor Fusion Signal: ${signals.joinToString { "${it.detectorType.name} (conf: ${String.format("%.2f", it.confidence)})" }}",
+                    syncStatus = SyncStatus.LOCAL
+                )
+
+                microReportRepo.saveReport(microReport)
+
+                val allReports = microReportRepo.getAllReports().first()
+                val candidates = patternEngine.detectCandidatePatterns(allReports)
+                val evaluated = candidates.map { trustEvaluator.evaluatePattern(it, allReports) }
+                patternRepo.clearPatterns()
+                evaluated.forEach { patternRepo.savePattern(it) }
+            } catch (e: Throwable) {
+                android.util.Log.e("Sahara", "Failed to bridge fusion signal to MicroReport: ${e.message}")
             }
         }
     }
