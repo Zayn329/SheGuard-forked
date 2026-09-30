@@ -117,4 +117,39 @@ class MeshRelayUnitTest {
         assertTrue(results["Alice"] is SmsDeliveryStatus.SIMULATED_DEMO)
         assertTrue(results["Bob"] is SmsDeliveryStatus.SIMULATED_DEMO)
     }
+
+    @Test
+    fun testEscalationDelegatesDistressAlertToMeshAdapter() {
+        val adapter = org.sahara.services.mesh.relay.SheGuardMeshAdapter(meshRelay = meshRelay)
+        val managerWithAdapter = EscalationFallbackManager(
+            meshRelay = meshRelay,
+            smsProvider = mockSmsProvider,
+            isDebug = true,
+            meshAdapter = adapter
+        )
+
+        val packet = MeshPacket(
+            incidentId = UUID.randomUUID().toString(),
+            packetType = MeshPacketType.DISTRESS_ALERT,
+            hopCount = 0,
+            maxHops = 12,
+            senderIntegrityMetadata = "device_A",
+            payloadHash = "sha256_hash",
+            payloadText = "EMERGENCY"
+        )
+
+        val payload = EmergencyAlertPayload(
+            incidentId = packet.incidentId,
+            timestamp = System.currentTimeMillis(),
+            locationText = "Mumbai",
+            evidenceIntegrityHash = "e3b0c442",
+            referenceCode = "REF123"
+        )
+
+        assertEquals(0, adapter.getOutboundQueueSize())
+
+        managerWithAdapter.executeEscalation(payload, emptyList(), packet)
+
+        assertEquals(1, adapter.getOutboundQueueSize())
+    }
 }

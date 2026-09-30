@@ -465,4 +465,59 @@ class SheGuardMeshUnitTest {
         assertTrue(result is SheGuardMeshProcessResult.Rejected)
         assertTrue((result as SheGuardMeshProcessResult.Rejected).reason.contains("hash mismatch"))
     }
+
+    @Test
+    fun test27_distressAlertPacketHandledAndRelayed() = runBlocking {
+        val distressPacket = MeshPacket(
+            packetId = UUID.randomUUID().toString(),
+            incidentId = UUID.randomUUID().toString(),
+            packetType = MeshPacketType.DISTRESS_ALERT,
+            hopCount = 0,
+            maxHops = 12,
+            senderIntegrityMetadata = "device_A",
+            payloadHash = "hash123",
+            payloadText = "HELP_DISTRESS"
+        )
+
+        val result = adapter.handleIncomingPacket(distressPacket)
+        assertTrue("DISTRESS_ALERT packet must be accepted and relayed", result is SheGuardMeshProcessResult.DistressRelayed)
+        assertEquals(distressPacket.packetId, (result as SheGuardMeshProcessResult.DistressRelayed).relayedPacket.packetId)
+    }
+
+    @Test
+    fun test28_duplicateDistressAlertIsIgnored() = runBlocking {
+        val distressPacket = MeshPacket(
+            packetId = UUID.randomUUID().toString(),
+            incidentId = UUID.randomUUID().toString(),
+            packetType = MeshPacketType.DISTRESS_ALERT,
+            hopCount = 0,
+            maxHops = 12,
+            senderIntegrityMetadata = "device_A",
+            payloadHash = "hash123",
+            payloadText = "HELP_DISTRESS"
+        )
+
+        val res1 = adapter.handleIncomingPacket(distressPacket)
+        assertTrue(res1 is SheGuardMeshProcessResult.DistressRelayed)
+
+        val res2 = adapter.handleIncomingPacket(distressPacket)
+        assertTrue("Duplicate DISTRESS_ALERT packet must be ignored", res2 is SheGuardMeshProcessResult.DuplicateIgnored)
+    }
+
+    @Test
+    fun test29_distressAlertHopLimitExceededIsRejected() = runBlocking {
+        val distressPacket = MeshPacket(
+            packetId = UUID.randomUUID().toString(),
+            incidentId = UUID.randomUUID().toString(),
+            packetType = MeshPacketType.DISTRESS_ALERT,
+            hopCount = 12,
+            maxHops = 12,
+            senderIntegrityMetadata = "device_A",
+            payloadHash = "hash123",
+            payloadText = "HELP_DISTRESS"
+        )
+
+        val result = adapter.handleIncomingPacket(distressPacket)
+        assertTrue("DISTRESS_ALERT at maxHops must return HopLimitExceeded", result is SheGuardMeshProcessResult.HopLimitExceeded)
+    }
 }

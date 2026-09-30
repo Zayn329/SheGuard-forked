@@ -133,4 +133,45 @@ class EmergencyResponseIntegrationTest {
         assertNotNull(saved)
         assertEquals(IncidentState.ACTIVE_INCIDENT, saved?.state)
     }
+
+    @Test
+    fun testContactPersistenceInRepository() = runBlocking {
+        val initialContacts = contactRepository.getContacts().first()
+        assertEquals(2, initialContacts.size)
+
+        val newContact = NotifyContact(
+            displayName = "Dr. Mehta",
+            type = ContactType.SMS_ONLY,
+            phoneNumber = "+91 9999999999"
+        )
+        contactRepository.saveContact(newContact)
+
+        val updatedContacts = contactRepository.getContacts().first()
+        assertEquals(3, updatedContacts.size)
+        assertTrue(updatedContacts.any { it.displayName == "Dr. Mehta" })
+
+        contactRepository.deleteContact(newContact.contactId)
+        val finalContacts = contactRepository.getContacts().first()
+        assertEquals(2, finalContacts.size)
+    }
+
+    @Test
+    fun testIncomingMeshDistressPayloadTriggersRelayAndPersistence() = runBlocking {
+        val meshRelay = NearbyConnectionsMeshRelay()
+        val adapter = org.sahara.services.mesh.relay.SheGuardMeshAdapter(meshRelay = meshRelay)
+
+        val distressPacket = org.sahara.services.mesh.models.MeshPacket(
+            incidentId = UUID.randomUUID().toString(),
+            packetType = org.sahara.services.mesh.models.MeshPacketType.DISTRESS_ALERT,
+            senderIntegrityMetadata = "peer_node",
+            payloadHash = "hash123",
+            payloadText = "HELP"
+        )
+
+        val wireBytes = org.sahara.services.mesh.transport.MeshPacketWireCodec.encode(distressPacket)
+        val processResult = adapter.handleIncomingWirePayload(wireBytes)
+
+        assertTrue(processResult is org.sahara.services.mesh.relay.SheGuardMeshProcessResult.DistressRelayed)
+        assertEquals(distressPacket.packetId, (processResult as org.sahara.services.mesh.relay.SheGuardMeshProcessResult.DistressRelayed).relayedPacket.packetId)
+    }
 }

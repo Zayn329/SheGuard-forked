@@ -32,13 +32,29 @@ import org.sahara.services.evidence.preroll.AudioChunk
 import org.sahara.services.evidence.preroll.BoundedAudioPreRollBuffer
 
 import org.sahara.core.data.db.SaharaDatabase
+import kotlinx.coroutines.flow.first
 import org.sahara.core.data.repository.AuditRepositoryImpl
+import org.sahara.core.data.repository.ContactRepositoryImpl
 import org.sahara.core.data.repository.IncidentRepositoryImpl
+import org.sahara.core.data.repository.MicroReportRepositoryImpl
+import org.sahara.core.data.repository.PatternRepositoryImpl
+import org.sahara.core.domain.engine.SpatioTemporalPatternEngine
+import org.sahara.core.domain.engine.TrustAndAntiGamingEvaluator
+import org.sahara.core.domain.models.DetectorType
+import org.sahara.core.domain.models.MicroReport
+import org.sahara.core.domain.models.ReportCategory
+import org.sahara.core.domain.models.SyncStatus
+import org.sahara.features.notifycircle.manager.NotifyCircleManager
+import org.sahara.services.mesh.fallback.EscalationFallbackManager
+import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
+import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 
 class SafetyForegroundService : Service(), SensorEventListener {
 
     private val binder = LocalBinder()
     var stateMachine: IncidentStateMachine? = null
+    var notifyCircleManager: NotifyCircleManager? = null
+    var sheGuardMeshAdapter: SheGuardMeshAdapter? = null
 
     // Real audio & sensor detection infrastructure
     private val detectionConfig = DetectionConfig()
@@ -122,10 +138,12 @@ class SafetyForegroundService : Service(), SensorEventListener {
                         activeSm.onSuspiciousSignalDetected(decision.primarySignal.detectorType.name)
                         activeSm.transitionToCandidate()
                         updateNotificationForState(IncidentState.CANDIDATE_INCIDENT)
+                        bridgeFusionDecisionToMicroReport(listOf(decision.primarySignal))
                     }
                     is org.sahara.services.detection.fusion.FusionDecision.ConfirmIncident -> {
                         activeSm.activateIncident(decision.activeSignals.joinToString { it.detectorType.name })
                         updateNotificationForState(IncidentState.ACTIVE_INCIDENT)
+                        bridgeFusionDecisionToMicroReport(decision.activeSignals)
                     }
                     is org.sahara.services.detection.fusion.FusionDecision.CandidateExpired -> {
                         if (activeSm.currentState.value != IncidentState.ACTIVE_INCIDENT && activeSm.currentState.value != IncidentState.SEALED) {
@@ -146,6 +164,63 @@ class SafetyForegroundService : Service(), SensorEventListener {
         }
     }
 
+    private fun bridgeFusionDecisionToMicroReport(signals: List<org.sahara.services.detection.models.SignalResult>) {
+        if (signals.isEmpty()) return
+        serviceScope.launch {
+            try {
+                val db = SaharaDatabase.getDatabase(applicationContext)
+                val microReportRepo = MicroReportRepositoryImpl(db.microReportDao())
+                val patternRepo = PatternRepositoryImpl(db.patternDao())
+                val patternEngine = SpatioTemporalPatternEngine()
+                val trustEvaluator = TrustAndAntiGamingEvaluator()
+
+                val category = when {
+                    signals.any { it.detectorType == DetectorType.SCREAM } -> ReportCategory.SUSPICIOUS_ACTIVITY
+                    signals.any { it.detectorType == DetectorType.MOTION } -> ReportCategory.HARASSMENT
+                    else -> ReportCategory.SUSPICIOUS_ACTIVITY
+                }
+
+                val microReport = MicroReport(
+                    anonymousReporterToken = "sensor_node_${java.util.UUID.randomUUID().toString().take(8)}",
+                    category = category,
+                    latitude = 19.0760,
+                    longitude = 72.8777,
+                    approximateArea = "Bandra West / Mumbai Central",
+                    contextDescription = "Automated Sensor Fusion Signal: ${signals.joinToString { "${it.detectorType.name} (conf: ${String.format("%.2f", it.confidence)})" }}",
+                    syncStatus = SyncStatus.LOCAL
+                )
+
+                microReportRepo.saveReport(microReport)
+
+                val allReports = microReportRepo.getAllReports().first()
+                val candidates = patternEngine.detectCandidatePatterns(allReports)
+                val evaluated = candidates.map { trustEvaluator.evaluatePattern(it, allReports) }
+                patternRepo.clearPatterns()
+                evaluated.forEach { patternRepo.savePattern(it) }
+            } catch (e: Throwable) {
+                android.util.Log.e("Sahara", "Failed to bridge fusion signal to MicroReport: ${e.message}")
+            }
+        }
+    }
+
+    fun getOrCreateNotifyCircleManager(): NotifyCircleManager {
+        if (notifyCircleManager == null) {
+            val db = SaharaDatabase.getDatabase(applicationContext)
+            val contactRepo = ContactRepositoryImpl(db.notifyContactDao())
+            val auditRepo = AuditRepositoryImpl(db.auditEventDao())
+            val meshRelay = sheGuardMeshAdapter?.meshRelay ?: NearbyConnectionsMeshRelay()
+            val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
+            val fallbackManager = EscalationFallbackManager(
+                meshRelay = meshRelay,
+                smsProvider = smsProvider,
+                isDebug = true,
+                meshAdapter = sheGuardMeshAdapter
+            )
+            notifyCircleManager = NotifyCircleManager(contactRepo, auditRepo, fallbackManager)
+        }
+        return notifyCircleManager!!
+    }
+
     fun getOrCreateStateMachine(): IncidentStateMachine {
         if (stateMachine == null) {
             val db = SaharaDatabase.getDatabase(applicationContext)
@@ -153,10 +228,35 @@ class SafetyForegroundService : Service(), SensorEventListener {
             val auditRepo = AuditRepositoryImpl(db.auditEventDao())
             stateMachine = IncidentStateMachine(incRepo, auditRepo)
         }
-        stateMachine?.onStateChanged = { newState ->
+        val sm = stateMachine!!
+        sm.onStateChanged = { newState ->
             fusionEngine.updateCurrentState(newState)
         }
-        return stateMachine!!
+        if (sm.onIncidentActivated == null) {
+            sm.onIncidentActivated = { incident ->
+                try {
+                    evidenceCaptureEngine?.processBufferedPreRoll(incident.incidentId)
+                } catch (e: Throwable) {
+                    android.util.Log.e("Sahara", "Pre-roll capture error in service: ${e.message}")
+                }
+                try {
+                    val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
+                    val manager = getOrCreateNotifyCircleManager()
+                    serviceScope.launch {
+                        manager.dispatchAlert(
+                            incidentId = incident.incidentId,
+                            locationText = "Background Distress Location",
+                            locationAgeSeconds = 0,
+                            evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
+                            referenceCode = refCode
+                        )
+                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("Sahara", "Notification dispatch error in service: ${e.message}")
+                }
+            }
+        }
+        return sm
     }
 
     private fun startAudioRecording() {
