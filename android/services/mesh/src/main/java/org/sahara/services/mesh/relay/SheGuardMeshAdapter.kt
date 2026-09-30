@@ -103,6 +103,22 @@ class SheGuardMeshAdapter(
     }
 
     /**
+     * Queues any generic MeshPacket (such as DISTRESS_ALERT) for mesh relay.
+     * Attempts immediate transmission if transport is connected, or adds to store-and-forward queue.
+     */
+    fun queuePacketForRelay(packet: MeshPacket): MeshPacket {
+        outboundQueue.add(packet)
+
+        if (transport != null) {
+            sendToConnectedPeers(packet)
+        } else if (meshStatus == MeshStatus.AVAILABLE) {
+            meshRelay.processIncomingPacket(packet)
+        }
+
+        return packet
+    }
+
+    /**
      * Queues an alert for relay. If mesh is currently available, processes it
      * immediately through the relay; otherwise keeps it in the store-and-forward queue.
      */
@@ -123,15 +139,7 @@ class SheGuardMeshAdapter(
             maxHops = maxHops
         )
 
-        outboundQueue.add(packet)
-
-        if (transport != null) {
-            sendToConnectedPeers(packet)
-        } else if (meshStatus == MeshStatus.AVAILABLE) {
-            meshRelay.processIncomingPacket(packet)
-        }
-
-        return packet
+        return queuePacketForRelay(packet)
     }
 
     /**
@@ -199,6 +207,15 @@ class SheGuardMeshAdapter(
      * 4. If accepted: persist locally as a relayed alert ([RisingPatternAlert.isRelayed] = true).
      */
     suspend fun handleIncomingPacket(packet: MeshPacket): SheGuardMeshProcessResult {
+        if (packet.packetType == MeshPacketType.DISTRESS_ALERT) {
+            val relayResult = meshRelay.processIncomingPacket(packet)
+            return when (relayResult) {
+                is MeshRelayResult.DUPLICATE_IGNORED -> SheGuardMeshProcessResult.DuplicateIgnored(packet.packetId)
+                is MeshRelayResult.HOP_LIMIT_EXCEEDED -> SheGuardMeshProcessResult.HopLimitExceeded(packet.packetId)
+                is MeshRelayResult.ACCEPTED_FOR_RELAY -> SheGuardMeshProcessResult.DistressRelayed(relayResult.forwardedPacket)
+            }
+        }
+
         if (packet.packetType != MeshPacketType.SHEGUARD_ALERT) {
             return SheGuardMeshProcessResult.UnrecognizedType(packet.packetType.name)
         }
@@ -276,6 +293,7 @@ sealed class SheGuardMeshProcessResult {
         val relayedPacket: MeshPacket?
     ) : SheGuardMeshProcessResult()
 
+    data class DistressRelayed(val relayedPacket: MeshPacket) : SheGuardMeshProcessResult()
     data class DuplicateIgnored(val packetId: String) : SheGuardMeshProcessResult()
     data class HopLimitExceeded(val packetId: String) : SheGuardMeshProcessResult()
     data class Rejected(val reason: String) : SheGuardMeshProcessResult()

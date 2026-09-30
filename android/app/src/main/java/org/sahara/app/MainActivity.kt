@@ -187,7 +187,12 @@ class MainActivity : ComponentActivity() {
         startMeshTransport()
 
         val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
-        val fallbackManager = EscalationFallbackManager(meshRelay, smsProvider, isDebug = true)
+        val fallbackManager = EscalationFallbackManager(
+            meshRelay = meshRelay,
+            smsProvider = smsProvider,
+            isDebug = true,
+            meshAdapter = sheGuardMeshAdapter
+        )
         val notifyCircleManager = NotifyCircleManager(contactRepository, auditRepository, fallbackManager)
 
         stateMachine.onIncidentActivated = { incident ->

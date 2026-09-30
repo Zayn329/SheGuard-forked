@@ -4,6 +4,7 @@ import org.sahara.core.domain.models.NotifyContact
 import org.sahara.services.mesh.models.MeshPacket
 import org.sahara.services.mesh.relay.MeshRelayResult
 import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
+import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 
 enum class DeliveryTransportType {
     MESH_NEARBY,
@@ -60,7 +61,8 @@ sealed class SmsDeliveryStatus {
 class EscalationFallbackManager(
     private val meshRelay: NearbyConnectionsMeshRelay,
     private val smsProvider: SmsProvider,
-    private val isDebug: Boolean = false
+    private val isDebug: Boolean = false,
+    val meshAdapter: SheGuardMeshAdapter? = null
 ) {
 
     init {
@@ -81,6 +83,20 @@ class EscalationFallbackManager(
         fun create(
             meshRelay: NearbyConnectionsMeshRelay,
             isDebug: Boolean,
+            customSmsProvider: SmsProvider? = null,
+            meshAdapter: SheGuardMeshAdapter? = null
+        ): EscalationFallbackManager {
+            val provider = if (!isDebug) {
+                SystemSmsProvider()
+            } else {
+                customSmsProvider ?: DemoMockSmsProvider()
+            }
+            return EscalationFallbackManager(meshRelay, provider, isDebug = isDebug, meshAdapter = meshAdapter)
+        }
+
+        fun create(
+            meshAdapter: SheGuardMeshAdapter,
+            isDebug: Boolean,
             customSmsProvider: SmsProvider? = null
         ): EscalationFallbackManager {
             val provider = if (!isDebug) {
@@ -88,7 +104,7 @@ class EscalationFallbackManager(
             } else {
                 customSmsProvider ?: DemoMockSmsProvider()
             }
-            return EscalationFallbackManager(meshRelay, provider, isDebug = isDebug)
+            return EscalationFallbackManager(meshAdapter.meshRelay, provider, isDebug = isDebug, meshAdapter = meshAdapter)
         }
     }
 
@@ -103,7 +119,7 @@ class EscalationFallbackManager(
         if (meshPacket != null) {
             val meshResult = meshRelay.processIncomingPacket(meshPacket)
             if (meshResult is MeshRelayResult.ACCEPTED_FOR_RELAY) {
-                // Mesh accepted alert packet
+                meshAdapter?.queuePacketForRelay(meshPacket)
             }
         }
 
