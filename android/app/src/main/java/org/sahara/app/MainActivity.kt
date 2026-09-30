@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,6 +103,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var microReportRepository: MicroReportRepositoryImpl
     private lateinit var patternRepository: PatternRepositoryImpl
     private lateinit var alertRepository: AlertRepositoryImpl
+    private lateinit var contactRepository: ContactRepositoryImpl
     private lateinit var stateMachine: IncidentStateMachine
     private lateinit var panicController: PanicController
     private lateinit var keyManager: KeyStorageManagerImpl
@@ -147,7 +149,7 @@ class MainActivity : ComponentActivity() {
         microReportRepository = MicroReportRepositoryImpl(database.microReportDao())
         patternRepository = PatternRepositoryImpl(database.patternDao())
         alertRepository = AlertRepositoryImpl(database.alertDao())
-        val contactRepository = ContactRepositoryImpl(database.notifyContactDao())
+        contactRepository = ContactRepositoryImpl(database.notifyContactDao())
 
         stateMachine = IncidentStateMachine(incidentRepository, auditRepository)
         panicController = PanicController(stateMachine)
@@ -174,7 +176,24 @@ class MainActivity : ComponentActivity() {
         )
         lifecycleScope.launch {
             meshTransport.incomingPayloads.collect { bytes ->
-                sheGuardMeshAdapter.handleIncomingWirePayload(bytes)
+                val result = sheGuardMeshAdapter.handleIncomingWirePayload(bytes)
+                when (result) {
+                    is org.sahara.services.mesh.relay.SheGuardMeshProcessResult.DistressRelayed -> {
+                        showIncomingMeshNotification(
+                            title = "🚨 EMERGENCY: Nearby Distress Signal",
+                            content = "Received emergency distress alert via BLE mesh.",
+                            screen = Screen.TRUSTED_ALERT
+                        )
+                    }
+                    is org.sahara.services.mesh.relay.SheGuardMeshProcessResult.AcceptedAndPersisted -> {
+                        showIncomingMeshNotification(
+                            title = "🛡️ Early Warning Alert Received",
+                            content = "Received verified safety pattern: ${result.payload.category}",
+                            screen = Screen.SHEGUARD_REPORTING
+                        )
+                    }
+                    else -> { /* Deduplicated or invalid */ }
+                }
             }
         }
         lifecycleScope.launch {
@@ -259,22 +278,7 @@ class MainActivity : ComponentActivity() {
             } catch (_: Exception) {}
         }
 
-        var notifyContacts by remember {
-            mutableStateOf(
-                listOf(
-                    org.sahara.core.domain.models.NotifyContact(
-                        displayName = "Aisha",
-                        type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                        phoneNumber = "+91 9876543210"
-                    ),
-                    org.sahara.core.domain.models.NotifyContact(
-                        displayName = "Sara",
-                        type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                        phoneNumber = "+91 9876543211"
-                    )
-                )
-            )
-        }
+        val notifyContacts by contactRepository.getContacts().collectAsState(initial = emptyList())
 
         when (currentScreen) {
             Screen.WELCOME -> {
@@ -291,6 +295,23 @@ class MainActivity : ComponentActivity() {
             }
             Screen.CIRCLE_SETUP -> {
                 NotifyCircleSetupScreen(
+                    contacts = notifyContacts,
+                    onAddContact = { name, phone ->
+                        scope.launch {
+                            contactRepository.saveContact(
+                                org.sahara.core.domain.models.NotifyContact(
+                                    displayName = name,
+                                    type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
+                                    phoneNumber = phone
+                                )
+                            )
+                        }
+                    },
+                    onRemoveContact = { contact ->
+                        scope.launch {
+                            contactRepository.deleteContact(contact.contactId)
+                        }
+                    },
                     onContinue = { currentScreen = Screen.PREFERENCES },
                     onBack = { currentScreen = Screen.PERMISSIONS }
                 )
@@ -410,14 +431,20 @@ class MainActivity : ComponentActivity() {
                 NotifyCircleManagementScreen(
                     contacts = notifyContacts,
                     onAddContact = { name, phone ->
-                        notifyContacts = notifyContacts + org.sahara.core.domain.models.NotifyContact(
-                            displayName = name,
-                            type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                            phoneNumber = phone
-                        )
+                        scope.launch {
+                            contactRepository.saveContact(
+                                org.sahara.core.domain.models.NotifyContact(
+                                    displayName = name,
+                                    type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
+                                    phoneNumber = phone
+                                )
+                            )
+                        }
                     },
                     onRemoveContact = { contact ->
-                        notifyContacts = notifyContacts.filterNot { it.displayName == contact.displayName }
+                        scope.launch {
+                            contactRepository.deleteContact(contact.contactId)
+                        }
                     },
                     onBack = { currentScreen = Screen.HOME }
                 )
@@ -500,5 +527,42 @@ class MainActivity : ComponentActivity() {
         }
         meshTransport.startAdvertising()
         meshTransport.startDiscovery()
+    }
+
+    fun showIncomingMeshNotification(title: String, content: String, screen: Screen) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val channelId = "sahara_mesh_alerts"
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                channelId,
+                "Sahara Mesh Early Warning Alerts",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for incoming BLE/P2P mesh safety and distress alerts"
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("TARGET_SCREEN", screen.name)
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            this,
+            System.currentTimeMillis().toInt(),
+            intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = androidx.core.app.NotificationCompat.Builder(this, channelId)
+            .setContentTitle(title)
+            .setContentText(content)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 }
