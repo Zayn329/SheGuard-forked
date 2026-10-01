@@ -24,6 +24,16 @@ class SheGuardDataUnitTest {
             return kotlinx.coroutines.flow.flowOf(reports.values.toList().sortedByDescending { it.timestamp })
         }
 
+        override suspend fun getUnsyncedReports(): List<org.sahara.core.data.db.MicroReportEntity> {
+            return reports.values.filter { it.syncStatus != "SYNCED" }
+        }
+
+        override suspend fun updateSyncStatus(id: String, syncStatus: String) {
+            reports[id]?.let {
+                reports[id] = it.copy(syncStatus = syncStatus)
+            }
+        }
+
         override suspend fun insertReport(report: org.sahara.core.data.db.MicroReportEntity) {
             reports[report.reportId] = report
         }
