@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NotifyContactEntity::class,
         AuditEventEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class SaharaDatabase : RoomDatabase() {
@@ -110,6 +110,16 @@ abstract class SaharaDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE `micro_reports` ADD COLUMN `accuracy` REAL DEFAULT NULL
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getDatabase(context: Context): SaharaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -117,7 +127,7 @@ abstract class SaharaDatabase : RoomDatabase() {
                     SaharaDatabase::class.java,
                     "sahara_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                 INSTANCE = instance
                 instance

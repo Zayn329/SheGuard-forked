@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -119,8 +120,13 @@ class MainActivity : ComponentActivity() {
     private val meshPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        if (grants.values.all { it }) {
+        val granted = grants.filterValues { it }.keys
+        val denied = grants.filterValues { !it }.keys
+        if (denied.isEmpty()) {
+            org.sahara.services.mesh.util.MeshLogger.i("PERMISSIONS_GRANTED: All requested runtime permissions granted: ${granted.joinToString(", ")}")
             startMeshTransport()
+        } else {
+            org.sahara.services.mesh.util.MeshLogger.w("PERMISSIONS_MISSING: Runtime permissions denied: ${denied.joinToString(", ")}")
         }
     }
 
@@ -507,6 +513,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::meshTransport.isInitialized) {
+            val status = meshTransport.status.value
+            if (status == org.sahara.services.mesh.transport.MeshTransportStatus.PERMISSION_REQUIRED ||
+                status == org.sahara.services.mesh.transport.MeshTransportStatus.UNAVAILABLE ||
+                status == org.sahara.services.mesh.transport.MeshTransportStatus.STOPPED) {
+                startMeshTransport()
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (::meshTransport.isInitialized) {
@@ -519,12 +537,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startMeshTransport() {
-        if (!::meshTransport.isInitialized) return
+        if (!::meshTransport.isInitialized) {
+            org.sahara.services.mesh.util.MeshLogger.w("MESH_START_ABORTED: meshTransport not yet initialized")
+            return
+        }
         val missing = MeshPermissionManager.missingPermissions(this)
         if (missing.isNotEmpty()) {
+            org.sahara.services.mesh.util.MeshLogger.i("PERMISSIONS_MISSING: Requesting ${missing.size} missing permissions via runtime launcher")
             meshPermissionLauncher.launch(missing)
             return
         }
+        org.sahara.services.mesh.util.MeshLogger.i("MESH_STARTING: Permissions verified. Starting advertising and discovery...")
         meshTransport.startAdvertising()
         meshTransport.startDiscovery()
     }

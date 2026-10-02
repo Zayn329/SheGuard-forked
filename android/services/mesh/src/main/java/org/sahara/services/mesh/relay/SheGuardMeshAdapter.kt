@@ -10,6 +10,7 @@ import org.sahara.services.mesh.models.SheGuardMeshAlertPayload
 import org.sahara.services.mesh.transport.MeshPacketWireCodec
 import org.sahara.services.mesh.transport.MeshTransport
 import org.sahara.services.mesh.transport.MeshTransportResult
+import org.sahara.services.mesh.util.MeshLogger
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Collections
@@ -108,6 +109,7 @@ class SheGuardMeshAdapter(
      */
     fun queuePacketForRelay(packet: MeshPacket): MeshPacket {
         outboundQueue.add(packet)
+        MeshLogger.i("MESSAGE_QUEUED: packetId=${packet.packetId}, type=${packet.packetType}, queueSize=${outboundQueue.size}")
 
         if (transport != null) {
             sendToConnectedPeers(packet)
@@ -183,9 +185,12 @@ class SheGuardMeshAdapter(
             }
         }
         if (sentCount > 0) {
+            MeshLogger.i("MESSAGE_SENT: packetId=${packet.packetId}, type=${packet.packetType}, sentPeers=$sentCount, totalPeers=${currentTransport.peers.value.size}")
             synchronized(outboundQueue) {
                 outboundQueue.removeAll { it.packetId == packet.packetId }
             }
+        } else {
+            MeshLogger.w("MESSAGE_SEND_FAILED: packetId=${packet.packetId}, connectedPeersCount=${currentTransport.peers.value.size}, remainingInQueue=${outboundQueue.size}")
         }
         return sentCount
     }
@@ -193,7 +198,10 @@ class SheGuardMeshAdapter(
     /** Decodes and validates a packet received from the real transport. */
     suspend fun handleIncomingWirePayload(bytes: ByteArray): SheGuardMeshProcessResult {
         val packet = MeshPacketWireCodec.decode(bytes)
-            ?: return SheGuardMeshProcessResult.Rejected("Malformed mesh packet envelope")
+        if (packet == null) {
+            MeshLogger.w("MESSAGE_RECEIVE_FAILED: Malformed mesh packet envelope")
+            return SheGuardMeshProcessResult.Rejected("Malformed mesh packet envelope")
+        }
         return handleIncomingPacket(packet)
     }
 
@@ -207,12 +215,21 @@ class SheGuardMeshAdapter(
      * 4. If accepted: persist locally as a relayed alert ([RisingPatternAlert.isRelayed] = true).
      */
     suspend fun handleIncomingPacket(packet: MeshPacket): SheGuardMeshProcessResult {
+        MeshLogger.i("MESSAGE_RECEIVED: packetId=${packet.packetId}, type=${packet.packetType}, hopCount=${packet.hopCount}")
+
         if (packet.packetType == MeshPacketType.DISTRESS_ALERT) {
             val relayResult = meshRelay.processIncomingPacket(packet)
             return when (relayResult) {
-                is MeshRelayResult.DUPLICATE_IGNORED -> SheGuardMeshProcessResult.DuplicateIgnored(packet.packetId)
-                is MeshRelayResult.HOP_LIMIT_EXCEEDED -> SheGuardMeshProcessResult.HopLimitExceeded(packet.packetId)
+                is MeshRelayResult.DUPLICATE_IGNORED -> {
+                    MeshLogger.i("DUPLICATE_IGNORED: Distress packetId=${packet.packetId}")
+                    SheGuardMeshProcessResult.DuplicateIgnored(packet.packetId)
+                }
+                is MeshRelayResult.HOP_LIMIT_EXCEEDED -> {
+                    MeshLogger.w("HOP_LIMIT_EXCEEDED: Distress packetId=${packet.packetId}, hopCount=${packet.hopCount}")
+                    SheGuardMeshProcessResult.HopLimitExceeded(packet.packetId)
+                }
                 is MeshRelayResult.ACCEPTED_FOR_RELAY -> {
+                    MeshLogger.i("MESSAGE_RELAYED: Distress alert packetId=${packet.packetId}")
                     if (transport != null) {
                         sendToConnectedPeers(relayResult.forwardedPacket)
                     }
@@ -222,17 +239,20 @@ class SheGuardMeshAdapter(
         }
 
         if (packet.packetType != MeshPacketType.SHEGUARD_ALERT) {
+            MeshLogger.w("MESSAGE_REJECTED: Unrecognized packetType='${packet.packetType.name}'")
             return SheGuardMeshProcessResult.UnrecognizedType(packet.packetType.name)
         }
 
         // 1. Validation gate
         val validationResult = validator.validate(packet.payloadText)
         if (validationResult is MeshValidationResult.Rejected) {
+            MeshLogger.w("MESSAGE_REJECTED: Validation failed for packetId=${packet.packetId}, reason=${validationResult.reason}")
             return SheGuardMeshProcessResult.Rejected(validationResult.reason)
         }
         val validPayload = (validationResult as MeshValidationResult.Valid).payload
 
         if (!packet.payloadHash.equals(computeSha256(packet.payloadText), ignoreCase = true)) {
+            MeshLogger.w("MESSAGE_REJECTED: Hash mismatch for packetId=${packet.packetId}")
             return SheGuardMeshProcessResult.Rejected("Payload integrity hash mismatch")
         }
 
@@ -240,14 +260,17 @@ class SheGuardMeshAdapter(
         val relayResult = meshRelay.processIncomingPacket(packet)
         return when (relayResult) {
             is MeshRelayResult.DUPLICATE_IGNORED -> {
+                MeshLogger.i("DUPLICATE_IGNORED: packetId=${packet.packetId}")
                 SheGuardMeshProcessResult.DuplicateIgnored(packet.packetId)
             }
             is MeshRelayResult.HOP_LIMIT_EXCEEDED -> {
+                MeshLogger.w("HOP_LIMIT_EXCEEDED: packetId=${packet.packetId}, hopCount=${packet.hopCount}")
                 SheGuardMeshProcessResult.HopLimitExceeded(packet.packetId)
             }
             is MeshRelayResult.ACCEPTED_FOR_RELAY -> {
                 val alert = payloadToAlert(validPayload)
                 alertRepository?.saveAlert(alert)
+                MeshLogger.i("MESSAGE_RELAYED: Successfully persisted relayed alert alertId=${alert.alertId}, category=${alert.category}, trustLevel=${alert.trustLevel}")
                 SheGuardMeshProcessResult.AcceptedAndPersisted(
                     payload = validPayload,
                     relayedPacket = relayResult.forwardedPacket

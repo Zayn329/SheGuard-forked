@@ -13,7 +13,8 @@ data class MicroReportEntity(
     val approximateArea: String,
     val timestamp: Long,
     val contextDescription: String?,
-    val syncStatus: String
+    val syncStatus: String,
+    val accuracy: Float? = null
 )
 
 @Entity(tableName = "spatio_temporal_patterns")

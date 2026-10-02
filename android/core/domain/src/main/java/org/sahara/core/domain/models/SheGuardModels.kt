@@ -25,7 +25,8 @@ data class MicroReport(
     val approximateArea: String = "Unknown Area",
     val timestamp: Long = System.currentTimeMillis(),
     val contextDescription: String? = null,
-    val syncStatus: SyncStatus = SyncStatus.LOCAL
+    val syncStatus: SyncStatus = SyncStatus.LOCAL,
+    val accuracy: Float? = null
 )
 
 enum class PatternState {

@@ -520,4 +520,28 @@ class SheGuardMeshUnitTest {
         val result = adapter.handleIncomingPacket(distressPacket)
         assertTrue("DISTRESS_ALERT at maxHops must return HopLimitExceeded", result is SheGuardMeshProcessResult.HopLimitExceeded)
     }
+
+    @Test
+    fun test30_meshPermissionManagerReturnsNonEmptyList() {
+        val permissions = org.sahara.services.mesh.transport.MeshPermissionManager.requiredPermissions()
+        assertNotNull(permissions)
+        assertTrue("Required permissions must not be empty", permissions.isNotEmpty())
+    }
+
+    @Test
+    fun test31_outboundQueueStoresAndDrainsCorrectly() {
+        val testAdapter = SheGuardMeshAdapter(
+            meshRelay = relay,
+            validator = validator,
+            alertRepository = fakeAlertRepo,
+            initialStatus = MeshStatus.UNAVAILABLE
+        )
+        val alert = createSampleAlert()
+        val packet = testAdapter.queueAlertForRelay(alert)
+
+        assertEquals("Queue size must be 1 when offline", 1, testAdapter.getOutboundQueueSize())
+
+        testAdapter.setMeshStatus(MeshStatus.AVAILABLE)
+        assertEquals("Queue must be drained when mesh becomes available", 0, testAdapter.getOutboundQueueSize())
+    }
 }

@@ -107,7 +107,8 @@ class MicroReportRepositoryImpl(private val microReportDao: MicroReportDao) : Mi
         approximateArea = approximateArea,
         timestamp = timestamp,
         contextDescription = contextDescription,
-        syncStatus = SyncStatus.valueOf(syncStatus)
+        syncStatus = SyncStatus.valueOf(syncStatus),
+        accuracy = accuracy
     )
 
     private fun MicroReport.toEntity() = MicroReportEntity(
@@ -119,7 +120,8 @@ class MicroReportRepositoryImpl(private val microReportDao: MicroReportDao) : Mi
         approximateArea = approximateArea,
         timestamp = timestamp,
         contextDescription = contextDescription,
-        syncStatus = syncStatus.name
+        syncStatus = syncStatus.name,
+        accuracy = accuracy
     )
 }
 

@@ -26,6 +26,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import org.sahara.app.location.DeviceLocationManager
+import org.sahara.app.location.LocationState
+import org.sahara.app.location.SheGuardLocation
 import org.sahara.core.domain.engine.RisingPatternAlertEngine
 import org.sahara.core.domain.engine.SpatioTemporalPatternEngine
 import org.sahara.core.domain.engine.TrustAndAntiGamingEvaluator
@@ -41,6 +48,7 @@ import org.sahara.core.domain.repository.PatternRepository
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,10 +61,58 @@ fun SheGuardReportingScreen(
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val locationManager = remember { DeviceLocationManager(context) }
+    var locationState by remember { mutableStateOf<LocationState>(LocationState.Idle) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            coroutineScope.launch {
+                locationState = LocationState.Fetching
+                locationState = locationManager.getCurrentDeviceLocation()
+            }
+        } else {
+            locationState = LocationState.PermissionRequired
+        }
+    }
+
+    fun refreshDeviceLocation() {
+        coroutineScope.launch {
+            if (!locationManager.hasAnyLocationPermission()) {
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            } else {
+                locationState = LocationState.Fetching
+                locationState = locationManager.getCurrentDeviceLocation()
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (locationManager.hasAnyLocationPermission()) {
+            locationState = LocationState.Fetching
+            locationState = locationManager.getCurrentDeviceLocation()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
     var selectedCategory by remember { mutableStateOf(ReportCategory.POOR_LIGHTING) }
     var contextText by remember { mutableStateOf("") }
-    var approximateArea by remember { mutableStateOf("Dadated Street / Mumbai Central") }
     var showConfirmation by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -328,22 +384,153 @@ fun SheGuardReportingScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Location context pill
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Location context card (Live GPS / Address / Accuracy)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(SheGuardColors.SurfaceElevated)
-                            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(14.dp))
+                            .padding(14.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "📍", fontSize = 15.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Location context: $approximateArea",
-                                style = MaterialTheme.typography.bodySmall.copy(color = SheGuardColors.TextPrimary, fontWeight = FontWeight.Medium)
-                            )
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(text = "📍", fontSize = 16.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "Device Location Context",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = SheGuardColors.Primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                        when (val state = locationState) {
+                                            is LocationState.Fetching -> {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(12.dp),
+                                                        strokeWidth = 2.dp,
+                                                        color = SheGuardColors.Primary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = "Fetching GPS location...",
+                                                        style = MaterialTheme.typography.bodySmall.copy(
+                                                            color = SheGuardColors.TextSecondary,
+                                                            fontWeight = FontWeight.Medium
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                            is LocationState.Success -> {
+                                                Text(
+                                                    text = state.location.readableAddress,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        color = SheGuardColors.TextPrimary,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                )
+                                            }
+                                            is LocationState.Error -> {
+                                                Text(
+                                                    text = "Location Unavailable",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        color = SheGuardColors.RoseText,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                )
+                                            }
+                                            is LocationState.PermissionRequired -> {
+                                                Text(
+                                                    text = "Location Permission Required",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        color = SheGuardColors.AmberText,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                )
+                                            }
+                                            is LocationState.Idle -> {
+                                                Text(
+                                                    text = "Location not acquired",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        color = SheGuardColors.TextSecondary
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Action / Refresh / Retry button
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SheGuardColors.PrimaryContainer)
+                                        .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(8.dp))
+                                        .clickable { refreshDeviceLocation() }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = if (locationState is LocationState.Error || locationState is LocationState.PermissionRequired) "Retry GPS" else "🔄 Refresh",
+                                        color = SheGuardColors.Primary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Subtitle / Accuracy / Diagnostics
+                            when (val state = locationState) {
+                                is LocationState.Success -> {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = String.format(Locale.US, "Coords: %.4f° N, %.4f° E", state.location.latitude, state.location.longitude),
+                                            style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.TextMuted, fontSize = 10.sp)
+                                        )
+                                        Text(
+                                            text = state.location.getAccuracyDescription(),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = if (state.location.isApproximateOnly) SheGuardColors.AmberText else SheGuardColors.EmeraldText,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                    }
+                                }
+                                is LocationState.Error -> {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = state.message,
+                                        style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.RoseText, fontSize = 10.sp)
+                                    )
+                                }
+                                is LocationState.PermissionRequired -> {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Tap Retry GPS to grant permissions for spatio-temporal cluster verification.",
+                                        style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.AmberText, fontSize = 10.sp)
+                                    )
+                                }
+                                else -> {}
+                            }
                         }
                     }
 
@@ -375,14 +562,21 @@ fun SheGuardReportingScreen(
                         onClick = {
                             coroutineScope.launch {
                                 isSubmitting = true
+                                val loc = (locationState as? LocationState.Success)?.location
+                                val reportLat = loc?.latitude
+                                val reportLng = loc?.longitude
+                                val reportArea = loc?.readableAddress ?: "Location Unknown / Unavailable"
+                                val reportAcc = loc?.accuracy
+
                                 val report = MicroReport(
                                     anonymousReporterToken = anonymousToken,
                                     category = selectedCategory,
-                                    latitude = 19.0760,
-                                    longitude = 72.8777,
-                                    approximateArea = approximateArea,
+                                    latitude = reportLat,
+                                    longitude = reportLng,
+                                    approximateArea = reportArea,
                                     contextDescription = contextText.ifBlank { null },
-                                    syncStatus = SyncStatus.LOCAL
+                                    syncStatus = SyncStatus.LOCAL,
+                                    accuracy = reportAcc
                                 )
                                 repository.saveReport(report)
 
@@ -664,10 +858,30 @@ fun SheGuardReportingScreen(
                                                 fontSize = 10.sp
                                             )
                                         }
+                                        val lat = report.latitude
+                                        val lng = report.longitude
+                                        val acc = report.accuracy
+                                        val locLabel = buildString {
+                                            append(report.approximateArea)
+                                            if (lat != null && lng != null) {
+                                                append(" (${String.format(Locale.US, "%.4f, %.4f", lat, lng)}")
+                                                if (acc != null) {
+                                                    append(" ±${acc.roundToInt()}m")
+                                                }
+                                                append(")")
+                                            }
+                                        }
+                                        Text(
+                                            text = "📍 $locLabel",
+                                            color = SheGuardColors.TextPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
                                         if (report.contextDescription != null) {
                                             Text(
                                                 text = report.contextDescription!!,
-                                                color = SheGuardColors.TextPrimary,
+                                                color = SheGuardColors.TextSecondary,
                                                 fontSize = 12.sp,
                                                 modifier = Modifier.padding(top = 3.dp)
                                             )
