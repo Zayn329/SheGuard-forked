@@ -14,6 +14,12 @@ interface MicroReportDao {
     @Query("SELECT * FROM micro_reports ORDER BY timestamp DESC")
     fun getAllReports(): Flow<List<MicroReportEntity>>
 
+    @Query("SELECT * FROM micro_reports WHERE syncStatus != 'SYNCED'")
+    suspend fun getUnsyncedReports(): List<MicroReportEntity>
+
+    @Query("UPDATE micro_reports SET syncStatus = :syncStatus WHERE reportId = :id")
+    suspend fun updateSyncStatus(id: String, syncStatus: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReport(report: MicroReportEntity)
 }

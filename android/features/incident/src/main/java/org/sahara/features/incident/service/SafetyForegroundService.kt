@@ -197,6 +197,28 @@ class SafetyForegroundService : Service(), SensorEventListener {
                 val evaluated = candidates.map { trustEvaluator.evaluatePattern(it, allReports) }
                 patternRepo.clearPatterns()
                 evaluated.forEach { patternRepo.savePattern(it) }
+
+                // Relay rising pattern alerts or emergency distress packet over BLE mesh
+                val adapter = sheGuardMeshAdapter
+                if (adapter != null) {
+                    val alertEngine = org.sahara.core.domain.engine.RisingPatternAlertEngine()
+                    val alerts = alertEngine.generateAlerts(evaluated)
+                    alerts.forEach { alert ->
+                        adapter.queueAlertForRelay(alert)
+                    }
+
+                    // Direct distress packet queueing for high-confidence sensor events
+                    val distressPacket = org.sahara.services.mesh.models.MeshPacket(
+                        packetId = java.util.UUID.randomUUID().toString(),
+                        incidentId = microReport.reportId.toString(),
+                        packetType = org.sahara.services.mesh.models.MeshPacketType.DISTRESS_ALERT,
+                        createdAt = microReport.timestamp,
+                        senderIntegrityMetadata = microReport.anonymousReporterToken,
+                        payloadHash = microReport.reportId.toString(),
+                        payloadText = "{\"type\":\"SENSOR_DISTRESS\",\"category\":\"${category.name}\",\"timestamp\":${microReport.timestamp}}"
+                    )
+                    adapter.queuePacketForRelay(distressPacket)
+                }
             } catch (e: Throwable) {
                 android.util.Log.e("Sahara", "Failed to bridge fusion signal to MicroReport: ${e.message}")
             }

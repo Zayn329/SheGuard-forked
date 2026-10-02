@@ -10,12 +10,15 @@ import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.NotifyContact
 import org.sahara.core.domain.models.RisingPatternAlert
 import org.sahara.core.domain.models.SpatioTemporalPattern
+import org.sahara.core.domain.models.SyncStatus
 import java.util.UUID
 
 interface MicroReportRepository {
     suspend fun saveReport(report: MicroReport)
     fun getAllReports(): Flow<List<MicroReport>>
     suspend fun getReportById(id: UUID): MicroReport?
+    suspend fun getUnsyncedReports(): List<MicroReport>
+    suspend fun updateSyncStatus(id: UUID, syncStatus: SyncStatus)
 }
 
 interface PatternRepository {

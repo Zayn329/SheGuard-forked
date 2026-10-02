@@ -39,6 +39,7 @@ class SheGuardMeshAdapter(
     val meshRelay: NearbyConnectionsMeshRelay = NearbyConnectionsMeshRelay(),
     val validator: MeshPayloadValidator = MeshPayloadValidator(),
     val alertRepository: AlertRepository? = null,
+    val microReportRepository: org.sahara.core.domain.repository.MicroReportRepository? = null,
     initialStatus: MeshStatus = MeshStatus.AVAILABLE,
     val transport: MeshTransport? = null
 ) {
@@ -116,6 +117,52 @@ class SheGuardMeshAdapter(
         }
 
         return packet
+    }
+
+    /**
+     * Serializes a micro-report into a [MeshPacket] of type [MeshPacketType.MICRO_REPORT].
+     */
+    fun createPacketForReport(
+        report: org.sahara.core.domain.models.MicroReport,
+        senderMetadata: String = "sheguard_node",
+        maxHops: Int = 12
+    ): MeshPacket {
+        val payloadJson = """
+            {
+                "reportId": "${report.reportId}",
+                "anonymousReporterToken": "${report.anonymousReporterToken}",
+                "category": "${report.category.name}",
+                "latitude": ${report.latitude ?: "null"},
+                "longitude": ${report.longitude ?: "null"},
+                "approximateArea": "${report.approximateArea.replace("\"", "\\\"")}",
+                "timestamp": ${report.timestamp},
+                "contextDescription": ${report.contextDescription?.let { "\"${it.replace("\"", "\\\"")}\"" } ?: "null"}
+            }
+        """.trimIndent()
+        val hash = computeSha256(payloadJson)
+        return MeshPacket(
+            packetId = report.reportId.toString(),
+            incidentId = report.reportId.toString(),
+            packetType = MeshPacketType.MICRO_REPORT,
+            createdAt = report.timestamp,
+            hopCount = 0,
+            maxHops = maxHops,
+            senderIntegrityMetadata = senderMetadata,
+            payloadHash = hash,
+            payloadText = payloadJson
+        )
+    }
+
+    /**
+     * Queues a micro-report for relay over BLE/P2P mesh.
+     */
+    fun queueReportForRelay(
+        report: org.sahara.core.domain.models.MicroReport,
+        senderMetadata: String = "sheguard_node",
+        maxHops: Int = 12
+    ): MeshPacket {
+        val packet = createPacketForReport(report, senderMetadata, maxHops)
+        return queuePacketForRelay(packet)
     }
 
     /**
@@ -221,6 +268,26 @@ class SheGuardMeshAdapter(
             }
         }
 
+        if (packet.packetType == MeshPacketType.MICRO_REPORT) {
+            val relayResult = meshRelay.processIncomingPacket(packet)
+            return when (relayResult) {
+                is MeshRelayResult.DUPLICATE_IGNORED -> SheGuardMeshProcessResult.DuplicateIgnored(packet.packetId)
+                is MeshRelayResult.HOP_LIMIT_EXCEEDED -> SheGuardMeshProcessResult.HopLimitExceeded(packet.packetId)
+                is MeshRelayResult.ACCEPTED_FOR_RELAY -> {
+                    if (transport != null) {
+                        sendToConnectedPeers(relayResult.forwardedPacket)
+                    }
+                    val parsedReport = parseReportFromJson(packet.payloadText)
+                    if (parsedReport != null && microReportRepository != null) {
+                        microReportRepository.saveReport(
+                            parsedReport.copy(syncStatus = org.sahara.core.domain.models.SyncStatus.MESH_QUEUED)
+                        )
+                    }
+                    SheGuardMeshProcessResult.ReportRelayed(relayResult.forwardedPacket)
+                }
+            }
+        }
+
         if (packet.packetType != MeshPacketType.SHEGUARD_ALERT) {
             return SheGuardMeshProcessResult.UnrecognizedType(packet.packetType.name)
         }
@@ -280,6 +347,35 @@ class SheGuardMeshAdapter(
         return "${fmt.format(Date(start))}–${fmt.format(Date(end))}"
     }
 
+    private fun parseReportFromJson(json: String): org.sahara.core.domain.models.MicroReport? {
+        return try {
+            val reportIdMatch = Regex("\"reportId\"\\s*:\\s*\"([^\"]+)\"").find(json)
+            val tokenMatch = Regex("\"anonymousReporterToken\"\\s*:\\s*\"([^\"]+)\"").find(json)
+            val categoryMatch = Regex("\"category\"\\s*:\\s*\"([^\"]+)\"").find(json)
+            val latMatch = Regex("\"latitude\"\\s*:\\s*([0-9.-]+)").find(json)
+            val lngMatch = Regex("\"longitude\"\\s*:\\s*([0-9.-]+)").find(json)
+            val areaMatch = Regex("\"approximateArea\"\\s*:\\s*\"([^\"]+)\"").find(json)
+            val timeMatch = Regex("\"timestamp\"\\s*:\\s*([0-9]+)").find(json)
+            val descMatch = Regex("\"contextDescription\"\\s*:\\s*\"([^\"]+)\"").find(json)
+
+            if (reportIdMatch != null && tokenMatch != null && categoryMatch != null) {
+                org.sahara.core.domain.models.MicroReport(
+                    reportId = UUID.fromString(reportIdMatch.groupValues[1]),
+                    anonymousReporterToken = tokenMatch.groupValues[1],
+                    category = ReportCategory.valueOf(categoryMatch.groupValues[1]),
+                    latitude = latMatch?.groupValues?.get(1)?.toDoubleOrNull(),
+                    longitude = lngMatch?.groupValues?.get(1)?.toDoubleOrNull(),
+                    approximateArea = areaMatch?.groupValues?.get(1) ?: "Mesh Relayed Area",
+                    timestamp = timeMatch?.groupValues?.get(1)?.toLongOrNull() ?: System.currentTimeMillis(),
+                    contextDescription = descMatch?.groupValues?.get(1),
+                    syncStatus = org.sahara.core.domain.models.SyncStatus.MESH_QUEUED
+                )
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun computeSha256(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
@@ -299,6 +395,7 @@ sealed class SheGuardMeshProcessResult {
     ) : SheGuardMeshProcessResult()
 
     data class DistressRelayed(val relayedPacket: MeshPacket) : SheGuardMeshProcessResult()
+    data class ReportRelayed(val relayedPacket: MeshPacket) : SheGuardMeshProcessResult()
     data class DuplicateIgnored(val packetId: String) : SheGuardMeshProcessResult()
     data class HopLimitExceeded(val packetId: String) : SheGuardMeshProcessResult()
     data class Rejected(val reason: String) : SheGuardMeshProcessResult()
