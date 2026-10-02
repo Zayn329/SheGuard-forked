@@ -279,19 +279,14 @@ private fun PermissionCard(
 
 @Composable
 fun NotifyCircleSetupScreen(
+    contacts: List<NotifyContact> = emptyList(),
+    onAddContact: (String, String) -> Unit = { _, _ -> },
+    onRemoveContact: (NotifyContact) -> Unit = {},
     onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
     var contactName by remember { mutableStateOf("") }
     var contactPhone by remember { mutableStateOf("") }
-    var contacts by remember {
-        mutableStateOf(
-            listOf(
-                Pair("Aisha (Sister)", "+91 9876543210"),
-                Pair("Sara (Friend)", "+91 9876543211")
-            )
-        )
-    }
 
     Column(
         modifier = Modifier
@@ -323,13 +318,13 @@ fun NotifyCircleSetupScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            contacts.forEach { (name, phone) ->
+            contacts.forEach { contact ->
                 SaharaContactCard(
-                    name = name,
-                    relation = phone,
+                    name = contact.displayName,
+                    relation = contact.phoneNumber ?: "Direct Contact",
                     status = "Trusted",
                     avatarColor = SheGuardColors.PrimaryContainer,
-                    onRemove = { contacts = contacts.filterNot { it.first == name } }
+                    onRemove = { onRemoveContact(contact) }
                 )
             }
 
@@ -387,7 +382,7 @@ fun NotifyCircleSetupScreen(
                             text = "Add to Circle",
                             onClick = {
                                 if (contactName.isNotBlank() && contactPhone.isNotBlank()) {
-                                    contacts = contacts + Pair(contactName, contactPhone)
+                                    onAddContact(contactName, contactPhone)
                                     contactName = ""
                                     contactPhone = ""
                                 }
