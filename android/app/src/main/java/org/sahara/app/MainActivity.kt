@@ -96,6 +96,8 @@ enum class Screen {
 
 class MainActivity : ComponentActivity() {
 
+    private var initialScreenState = mutableStateOf(Screen.HOME)
+
     private lateinit var database: SaharaDatabase
     private lateinit var incidentRepository: IncidentRepositoryImpl
     private lateinit var evidenceRepository: EvidenceRepositoryImpl
@@ -139,8 +141,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val target = intent.getStringExtra("TARGET_SCREEN")
+        if (!target.isNullOrBlank()) {
+            try {
+                initialScreenState.value = Screen.valueOf(target)
+            } catch (_: Exception) {}
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val target = intent?.getStringExtra("TARGET_SCREEN")
+        if (!target.isNullOrBlank()) {
+            try {
+                initialScreenState.value = Screen.valueOf(target)
+            } catch (_: Exception) {}
+        }
 
         database = SaharaDatabase.getDatabase(applicationContext)
         incidentRepository = IncidentRepositoryImpl(database.incidentDao())
@@ -253,7 +273,10 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun SaharaAppNavigation() {
-        var currentScreen by remember { mutableStateOf(Screen.HOME) }
+        var currentScreen by remember { mutableStateOf(initialScreenState.value) }
+        LaunchedEffect(initialScreenState.value) {
+            currentScreen = initialScreenState.value
+        }
         var isMonitoringActive by remember { mutableStateOf(true) }
         var activeIncidentState by remember { mutableStateOf(IncidentState.IDLE) }
         var recentExportPackage by remember { mutableStateOf<ExportPackage?>(null) }
@@ -326,6 +349,7 @@ class MainActivity : ComponentActivity() {
                 HomeDashboardScreen(
                     isMonitoringActive = isMonitoringActive,
                     recentIncidentsCount = recordedIncidentsCount,
+                    alertRepository = alertRepository,
                     onToggleMonitoring = { enabled ->
                         isMonitoringActive = enabled
                         scope.launch {

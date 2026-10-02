@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -501,6 +502,7 @@ fun QuickPreferencesScreen(
 fun HomeDashboardScreen(
     isMonitoringActive: Boolean,
     recentIncidentsCount: Int = 0,
+    alertRepository: org.sahara.core.domain.repository.AlertRepository? = null,
     onToggleMonitoring: (Boolean) -> Unit,
     onStartSafetyWatch: () -> Unit,
     onNeedHelp: () -> Unit,
@@ -515,6 +517,8 @@ fun HomeDashboardScreen(
     onOpenSheGuardReport: () -> Unit = {}
 ) {
     var selectedNavTab by remember { mutableStateOf("Home") }
+    val activeAlerts by (alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList())
+        ?: remember { mutableStateOf(emptyList()) })
 
     Column(
         modifier = Modifier
@@ -575,6 +579,52 @@ fun HomeDashboardScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(text = "⚙️", fontSize = 18.sp)
+                }
+            }
+
+            if (activeAlerts.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, SheGuardColors.RoseBorder, RoundedCornerShape(18.dp))
+                        .clickable { onOpenSheGuardReport() },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = SheGuardColors.RoseBg),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "🚨", fontSize = 18.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "EARLY WARNING: ${activeAlerts.size} Active Risk Alert(s)",
+                                    color = SheGuardColors.RoseText,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Text(
+                                text = "View Pipeline →",
+                                color = SheGuardColors.RoseText,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val firstAlert = activeAlerts.first()
+                        Text(
+                            text = "• ${firstAlert.category.name.replace("_", " ")} at ${firstAlert.approximateLocation} (Trust: ${firstAlert.trustLevel.name})",
+                            color = SheGuardColors.TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
