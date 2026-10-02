@@ -193,7 +193,6 @@ class MainActivity : ComponentActivity() {
         sheGuardMeshAdapter = SheGuardMeshAdapter(
             meshRelay = meshRelay,
             alertRepository = alertRepository,
-            microReportRepository = microReportRepository,
             transport = meshTransport
         )
         lifecycleScope.launch {
@@ -227,13 +226,6 @@ class MainActivity : ComponentActivity() {
         }
         startMeshTransport()
 
-        val syncManager = org.sahara.app.sync.SheGuardSyncManager(microReportRepository)
-        lifecycleScope.launch {
-            try {
-                syncManager.syncPendingReports()
-            } catch (_: Exception) {}
-        }
-
         val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
         val fallbackManager = EscalationFallbackManager(
             meshRelay = meshRelay,
@@ -248,6 +240,22 @@ class MainActivity : ComponentActivity() {
                 captureEngine.processBufferedPreRoll(incident.incidentId)
             } catch (e: Throwable) {
                 android.util.Log.e("Sahara", "Pre-roll capture error: ${e.message}")
+            }
+            lifecycleScope.launch {
+                try {
+                    val report = org.sahara.core.domain.models.MicroReport(
+                        anonymousReporterToken = "panic_user_${UUID.randomUUID().toString().take(8)}",
+                        category = org.sahara.core.domain.models.ReportCategory.HARASSMENT,
+                        latitude = 19.0760,
+                        longitude = 72.8777,
+                        approximateArea = "Bandra West, Mumbai",
+                        contextDescription = "Manual Emergency Panic Call Triggered",
+                        syncStatus = org.sahara.core.domain.models.SyncStatus.LOCAL
+                    )
+                    microReportRepository.saveReport(report)
+                } catch (e: Throwable) {
+                    android.util.Log.e("Sahara", "Error saving panic micro report: ${e.message}")
+                }
             }
             try {
                 val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
@@ -280,30 +288,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-    }
-
-    private fun parseTargetScreen(intent: Intent?): Screen? {
-        val targetStr = intent?.getStringExtra("TARGET_SCREEN") ?: return null
-        return try {
-            Screen.valueOf(targetStr)
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     @Composable
     fun SaharaAppNavigation() {
-        val initialScreen = remember(intent) { parseTargetScreen(intent) }
-        var currentScreen by remember { mutableStateOf(initialScreen ?: Screen.HOME) }
-
-        LaunchedEffect(intent) {
-            val target = parseTargetScreen(intent)
-            if (target != null) {
-                currentScreen = target
-            }
+        var currentScreen by remember { mutableStateOf(initialScreenState.value) }
+        LaunchedEffect(initialScreenState.value) {
+            currentScreen = initialScreenState.value
         }
         var isMonitoringActive by remember { mutableStateOf(true) }
         var activeIncidentState by remember { mutableStateOf(IncidentState.IDLE) }
@@ -472,10 +461,21 @@ class MainActivity : ComponentActivity() {
                 )
             }
             Screen.TRUSTED_ALERT -> {
+                val context = androidx.compose.ui.platform.LocalContext.current
                 TrustedContactAlertScreen(
                     onCheckIn = { currentScreen = Screen.HOME },
-                    onCall = { /* Initiates phone call */ },
-                    onGetDirections = { /* Opens map */ },
+                    onCall = {
+                        try {
+                            val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:+919876543210"))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    },
+                    onGetDirections = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("geo:19.0760,72.8777?q=Bandra+West+Mumbai"))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    },
                     onBack = { currentScreen = Screen.HOME }
                 )
             }

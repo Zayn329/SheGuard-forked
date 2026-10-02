@@ -8,9 +8,7 @@ enum class MeshPacketType {
     EVIDENCE_HASH,
     DELIVERY_RECEIPT,
     /** SheGuard Phase E: rising-pattern early-warning alert relay payload. */
-    SHEGUARD_ALERT,
-    /** SheGuard Phase E: anonymous micro-report relay payload. */
-    MICRO_REPORT
+    SHEGUARD_ALERT
 }
 
 data class MeshPacket(
