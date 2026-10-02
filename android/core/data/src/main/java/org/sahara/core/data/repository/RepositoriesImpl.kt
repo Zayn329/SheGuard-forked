@@ -98,14 +98,6 @@ class MicroReportRepositoryImpl(private val microReportDao: MicroReportDao) : Mi
         return microReportDao.getReportById(id.toString())?.toDomain()
     }
 
-    override suspend fun getUnsyncedReports(): List<MicroReport> {
-        return microReportDao.getUnsyncedReports().map { it.toDomain() }
-    }
-
-    override suspend fun updateSyncStatus(id: UUID, syncStatus: SyncStatus) {
-        microReportDao.updateSyncStatus(id.toString(), syncStatus.name)
-    }
-
     private fun MicroReportEntity.toDomain() = MicroReport(
         reportId = UUID.fromString(reportId),
         anonymousReporterToken = anonymousReporterToken,
