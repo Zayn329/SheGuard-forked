@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
             foregroundService = binder.getService()
             foregroundService?.stateMachine = stateMachine
             foregroundService?.evidenceCaptureEngine = captureEngine
+            foregroundService?.sheGuardMeshAdapter = sheGuardMeshAdapter
             isServiceBound = true
         }
 
@@ -192,6 +193,7 @@ class MainActivity : ComponentActivity() {
         sheGuardMeshAdapter = SheGuardMeshAdapter(
             meshRelay = meshRelay,
             alertRepository = alertRepository,
+            microReportRepository = microReportRepository,
             transport = meshTransport
         )
         lifecycleScope.launch {
@@ -224,6 +226,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         startMeshTransport()
+
+        val syncManager = org.sahara.app.sync.SheGuardSyncManager(microReportRepository)
+        lifecycleScope.launch {
+            try {
+                syncManager.syncPendingReports()
+            } catch (_: Exception) {}
+        }
 
         val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
         val fallbackManager = EscalationFallbackManager(
@@ -271,11 +280,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
+    private fun parseTargetScreen(intent: Intent?): Screen? {
+        val targetStr = intent?.getStringExtra("TARGET_SCREEN") ?: return null
+        return try {
+            Screen.valueOf(targetStr)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     @Composable
     fun SaharaAppNavigation() {
-        var currentScreen by remember { mutableStateOf(initialScreenState.value) }
-        LaunchedEffect(initialScreenState.value) {
-            currentScreen = initialScreenState.value
+        val initialScreen = remember(intent) { parseTargetScreen(intent) }
+        var currentScreen by remember { mutableStateOf(initialScreen ?: Screen.HOME) }
+
+        LaunchedEffect(intent) {
+            val target = parseTargetScreen(intent)
+            if (target != null) {
+                currentScreen = target
+            }
         }
         var isMonitoringActive by remember { mutableStateOf(true) }
         var activeIncidentState by remember { mutableStateOf(IncidentState.IDLE) }

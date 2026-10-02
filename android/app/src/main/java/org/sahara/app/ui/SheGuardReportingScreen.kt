@@ -385,6 +385,7 @@ fun SheGuardReportingScreen(
                                     syncStatus = SyncStatus.LOCAL
                                 )
                                 repository.saveReport(report)
+                                actualMeshAdapter.queueReportForRelay(report)
 
                                 // Re-run pattern engine and trust evaluation, then persist evaluated patterns
                                 val updatedReports = reportsState + report
