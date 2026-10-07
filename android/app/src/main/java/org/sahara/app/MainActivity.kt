@@ -294,10 +294,33 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
+                    // Contacts saved before location sharing existed have it switched off, which strips the
+                    // location from their SMS. Everyone in the emergency circle should receive it.
+                    try {
+                        contactRepository.getContacts().first()
+                            .filter { !it.locationPermission }
+                            .forEach { contactRepository.saveContact(it.copy(locationPermission = true)) }
+                    } catch (e: Throwable) {
+                        android.util.Log.w("Sahara", "Could not enable location sharing for contacts: ${e.message}")
+                    }
+                    // Real GPS fix (works offline; falls back to last known location). Null if unavailable.
+                    val fix = try {
+                        org.sahara.app.location.DeviceLocationManager(applicationContext).getEmergencyFix()
+                    } catch (e: Throwable) {
+                        android.util.Log.w("Sahara", "Emergency location unavailable: ${e.message}")
+                        null
+                    }
+                    android.util.Log.i(
+                        "Sahara",
+                        if (fix != null) "Emergency SMS location: ${fix.latitude},${fix.longitude} (age ${fix.ageSeconds}s)"
+                        else "Emergency SMS location: NONE (check Location permission / Location toggle / GPS signal)"
+                    )
                     val delivery = notifyCircleManager.dispatchAlert(
                         incidentId = incident.incidentId,
-                        locationText = null, // never send a fabricated location in a real SMS
-                        locationAgeSeconds = null,
+                        locationText = fix?.let { String.format(java.util.Locale.US, "%.5f, %.5f", it.latitude, it.longitude) },
+                        locationAgeSeconds = fix?.ageSeconds,
+                        latitude = fix?.latitude,
+                        longitude = fix?.longitude,
                         evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
                         referenceCode = refCode
                     )
@@ -409,7 +432,8 @@ class MainActivity : ComponentActivity() {
                                     org.sahara.core.domain.models.NotifyContact(
                                         displayName = name,
                                         type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                                        phoneNumber = phone
+                                        phoneNumber = phone,
+                                        locationPermission = true // trusted contacts receive location during emergencies
                                     )
                                 )
                             }
@@ -544,7 +568,8 @@ class MainActivity : ComponentActivity() {
                                     org.sahara.core.domain.models.NotifyContact(
                                         displayName = name,
                                         type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                                        phoneNumber = phone
+                                        phoneNumber = phone,
+                                        locationPermission = true // trusted contacts receive location during emergencies
                                     )
                                 )
                             }

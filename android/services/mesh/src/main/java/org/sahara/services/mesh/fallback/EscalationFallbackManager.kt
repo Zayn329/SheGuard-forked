@@ -19,7 +19,9 @@ data class EmergencyAlertPayload(
     val locationText: String? = null,
     val locationAgeSeconds: Long? = null,
     val evidenceIntegrityHash: String,
-    val referenceCode: String
+    val referenceCode: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 ) {
     fun formatSmsMessage(): String {
         val locPart = if (!locationText.isNullOrBlank()) {
@@ -37,7 +39,17 @@ data class EmergencyAlertPayload(
 fun EmergencyAlertPayload.formatHumanSmsMessage(): String {
     val time = java.text.SimpleDateFormat("h:mm a, dd MMM", java.util.Locale.getDefault())
         .format(java.util.Date(timestamp))
-    val locPart = if (!locationText.isNullOrBlank()) " Last known location: $locationText." else ""
+    val locPart = when {
+        latitude != null && longitude != null -> {
+            val coords = String.format(java.util.Locale.US, "%.5f,%.5f", latitude, longitude)
+            val ageNote = if (locationAgeSeconds != null && locationAgeSeconds > 120L) {
+                " (last known, ${locationAgeSeconds / 60} min ago)"
+            } else ""
+            " Location: ${coords.replace(",", ", ")}$ageNote. Map: https://maps.google.com/?q=$coords"
+        }
+        !locationText.isNullOrBlank() -> " Last known location: $locationText."
+        else -> ""
+    }
     return "EMERGENCY ALERT from SheGuard: The person who added you as a trusted contact " +
             "may be in danger and needs help.$locPart " +
             "Please call or check on them right away. " +

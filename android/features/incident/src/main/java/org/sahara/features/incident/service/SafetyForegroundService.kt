@@ -274,11 +274,14 @@ class SafetyForegroundService : Service(), SensorEventListener {
                 try {
                     val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
                     val manager = getOrCreateNotifyCircleManager()
+                    val lastKnown = lastKnownLocationOrNull()
                     serviceScope.launch {
                         manager.dispatchAlert(
                             incidentId = incident.incidentId,
-                            locationText = "Background Distress Location",
-                            locationAgeSeconds = 0,
+                            locationText = lastKnown?.let { String.format(java.util.Locale.US, "%.5f, %.5f", it.latitude, it.longitude) },
+                            locationAgeSeconds = lastKnown?.let { ((System.currentTimeMillis() - it.time) / 1000L).coerceAtLeast(0L) },
+                            latitude = lastKnown?.latitude,
+                            longitude = lastKnown?.longitude,
                             evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
                             referenceCode = refCode
                         )
@@ -289,6 +292,20 @@ class SafetyForegroundService : Service(), SensorEventListener {
             }
         }
         return sm
+    }
+
+    /** Best last-known location from the device's own providers (works offline). Null if none/no permission. */
+    private fun lastKnownLocationOrNull(): android.location.Location? {
+        return try {
+            val hasPermission =
+                androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                        androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!hasPermission) return null
+            val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return null
+            lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }
+        } catch (e: Throwable) {
+            null
+        }
     }
 
     private fun startAudioRecording() {
