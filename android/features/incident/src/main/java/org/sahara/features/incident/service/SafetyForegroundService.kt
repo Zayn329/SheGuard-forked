@@ -242,11 +242,10 @@ class SafetyForegroundService : Service(), SensorEventListener {
             val contactRepo = ContactRepositoryImpl(db.notifyContactDao())
             val auditRepo = AuditRepositoryImpl(db.auditEventDao())
             val meshRelay = sheGuardMeshAdapter?.meshRelay ?: NearbyConnectionsMeshRelay()
-            val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
             val fallbackManager = EscalationFallbackManager(
                 meshRelay = meshRelay,
-                smsProvider = smsProvider,
-                isDebug = true,
+                smsProvider = org.sahara.services.mesh.fallback.SystemSmsProvider(applicationContext),
+                isDebug = false,
                 meshAdapter = sheGuardMeshAdapter
             )
             notifyCircleManager = NotifyCircleManager(contactRepo, auditRepo, fallbackManager)

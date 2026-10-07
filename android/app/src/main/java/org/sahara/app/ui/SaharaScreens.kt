@@ -936,6 +936,9 @@ fun SafetyWatchScreen(
 @Composable
 fun ActiveIncidentScreen(
     elapsedSeconds: Int = 18,
+    // null = SMS still being sent; empty = no trusted contacts saved (placeholder demo rows shown);
+    // otherwise real (name, status) per saved contact
+    smsResults: List<Pair<String, String>>? = null,
     onEndIncident: () -> Unit
 ) {
     val formattedTime = String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
@@ -1058,15 +1061,15 @@ fun ActiveIncidentScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     ActionRowItem(
-                        icon = "⟳",
+                        icon = if (smsResults.isNullOrEmpty()) "⟳" else "✓",
                         title = "Dispatching trusted circle alerts",
                         subtitle = "Attempting Nearby Mesh relay + direct SMS",
-                        isDone = false
+                        isDone = !smsResults.isNullOrEmpty()
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Contact delivery states
+                    // Real per-contact SMS delivery states
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1075,22 +1078,31 @@ fun ActiveIncidentScreen(
                             .padding(12.dp)
                     ) {
                         Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Aisha (Sister)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Delivered ✓", color = SheGuardColors.EmeraldText, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Sara (Friend)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Dispatching... ⟳", color = SheGuardColors.CyanAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                            when {
+                                smsResults == null -> Text("Sending SMS alerts… ⟳", color = SheGuardColors.CyanAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                                // No saved contacts: keep the original placeholder (mock) rows
+                                smsResults.isEmpty() -> {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Aisha (Sister)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Delivered ✓", color = SheGuardColors.EmeraldText, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Sara (Friend)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Dispatching... ⟳", color = SheGuardColors.CyanAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                else -> smsResults.forEachIndexed { index, (name, status) ->
+                                    if (index > 0) Spacer(modifier = Modifier.height(4.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        val ok = status == "Sent ✓"
+                                        Text(status, color = if (ok) SheGuardColors.EmeraldText else SheGuardColors.RoseText, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                             }
                         }
                     }

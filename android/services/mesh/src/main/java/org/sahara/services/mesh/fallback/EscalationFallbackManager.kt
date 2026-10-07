@@ -30,15 +30,48 @@ data class EmergencyAlertPayload(
     }
 }
 
+/**
+ * Plain-language SMS for the person receiving the alert (no hashes / IDs).
+ * [formatSmsMessage] stays as the technical form used for the mesh relay payload.
+ */
+fun EmergencyAlertPayload.formatHumanSmsMessage(): String {
+    val time = java.text.SimpleDateFormat("h:mm a, dd MMM", java.util.Locale.getDefault())
+        .format(java.util.Date(timestamp))
+    val locPart = if (!locationText.isNullOrBlank()) " Last known location: $locationText." else ""
+    return "EMERGENCY ALERT from SheGuard: The person who added you as a trusted contact " +
+            "may be in danger and needs help.$locPart " +
+            "Please call or check on them right away. " +
+            "If you cannot reach them, call the police on 112. " +
+            "Sent automatically at $time. Ref: $referenceCode"
+}
+
 interface SmsProvider {
     fun sendSms(phoneNumber: String, message: String): SmsDeliveryStatus
 }
 
-class SystemSmsProvider : SmsProvider {
+class SystemSmsProvider(private val context: android.content.Context? = null) : SmsProvider {
     override fun sendSms(phoneNumber: String, message: String): SmsDeliveryStatus {
+        if (context != null &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.SEND_SMS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return SmsDeliveryStatus.FAILED("SEND_SMS permission not granted")
+        }
         return try {
-            val smsManager = android.telephony.SmsManager.getDefault()
-            smsManager.sendTextMessage(phoneNumber, null, message, null, null)
+            @Suppress("DEPRECATION")
+            val smsManager: android.telephony.SmsManager =
+                if (context != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    context.getSystemService(android.telephony.SmsManager::class.java)
+                } else {
+                    android.telephony.SmsManager.getDefault()
+                }
+            val parts = smsManager.divideMessage(message)
+            if (parts.size > 1) {
+                smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+            } else {
+                smsManager.sendTextMessage(phoneNumber, null, message, null, null)
+            }
             SmsDeliveryStatus.ACCEPTED_BY_TRANSPORT
         } catch (e: Throwable) {
             SmsDeliveryStatus.FAILED(e.message ?: "SMS Manager failed")
@@ -125,7 +158,7 @@ class EscalationFallbackManager(
 
         // 2. Direct SMS Escalation Fallback for eligible SMS contacts
         val smsContacts = contacts.filter { !it.phoneNumber.isNullOrBlank() && it.notificationPermission }
-        val smsText = alertPayload.formatSmsMessage()
+        val smsText = alertPayload.formatHumanSmsMessage()
 
         for (contact in smsContacts) {
             val status = smsProvider.sendSms(contact.phoneNumber!!, smsText)

@@ -125,6 +125,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var meshTransport: NearbyConnectionsTransport
     private lateinit var sheGuardMeshAdapter: SheGuardMeshAdapter
 
+    // Live per-contact SMS result for the Emergency Mode screen (null = still sending)
+    private val smsDispatchResults = MutableStateFlow<List<Pair<String, String>>?>(null)
+
     private val prefs by lazy { getSharedPreferences("sahara_prefs", Context.MODE_PRIVATE) }
     private fun isOnboardingDone() = prefs.getBoolean("has_completed_onboarding", false)
     private fun markOnboardingDone() = prefs.edit().putBoolean("has_completed_onboarding", true).apply()
@@ -169,9 +172,20 @@ class MainActivity : ComponentActivity() {
         val denied = grants.filterValues { !it }.keys
         if (denied.isEmpty()) {
             org.sahara.services.mesh.util.MeshLogger.i("PERMISSIONS_GRANTED: All requested runtime permissions granted: ${granted.joinToString(", ")}")
-            startMeshTransport()
         } else {
             org.sahara.services.mesh.util.MeshLogger.w("PERMISSIONS_MISSING: Runtime permissions denied: ${denied.joinToString(", ")}")
+        }
+        if (android.Manifest.permission.SEND_SMS in denied) {
+            android.widget.Toast.makeText(
+                this,
+                "SMS permission denied: emergency alerts cannot be texted to your trusted contacts.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+        // Start mesh whenever its own permissions are satisfied (independent of the SMS permission)
+        if (MeshPermissionManager.missingPermissions(this).isEmpty()) {
+            meshTransport.startAdvertising()
+            meshTransport.startDiscovery()
         }
     }
 
@@ -259,11 +273,11 @@ class MainActivity : ComponentActivity() {
         }
         startMeshTransport()
 
-        val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
+        // Real SMS to the stored trusted contacts (no demo mock).
         val fallbackManager = EscalationFallbackManager(
             meshRelay = meshRelay,
-            smsProvider = smsProvider,
-            isDebug = true,
+            smsProvider = org.sahara.services.mesh.fallback.SystemSmsProvider(applicationContext),
+            isDebug = false,
             meshAdapter = sheGuardMeshAdapter
         )
         val notifyCircleManager = NotifyCircleManager(contactRepository, auditRepository, fallbackManager)
@@ -274,17 +288,26 @@ class MainActivity : ComponentActivity() {
             } catch (e: Throwable) {
                 android.util.Log.e("Sahara", "Pre-roll capture error: ${e.message}")
             }
-            try {
-                val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
-                notifyCircleManager.dispatchAlert(
-                    incidentId = incident.incidentId,
-                    locationText = "Bandra West, Mumbai",
-                    locationAgeSeconds = 0,
-                    evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
-                    referenceCode = refCode
-                )
-            } catch (e: Throwable) {
-                android.util.Log.e("Sahara", "Notification dispatch error: ${e.message}")
+            // Send the SMS alerts in the background so incident activation / evidence capture is never delayed.
+            // No saved contacts -> empty result (UI shows the placeholder); saved contacts -> real SMS.
+            smsDispatchResults.value = null
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
+                    val delivery = notifyCircleManager.dispatchAlert(
+                        incidentId = incident.incidentId,
+                        locationText = null, // never send a fabricated location in a real SMS
+                        locationAgeSeconds = null,
+                        evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
+                        referenceCode = refCode
+                    )
+                    smsDispatchResults.value = delivery.map {
+                        it.contactName to if (it.state == org.sahara.features.notifycircle.manager.ContactDeliveryState.FAILED) "Failed ✗" else "Sent ✓"
+                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("Sahara", "Notification dispatch error: ${e.message}")
+                    smsDispatchResults.value = emptyList()
+                }
             }
         }
 
@@ -469,8 +492,10 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 Screen.ACTIVE_INCIDENT -> {
+                    val smsResults by smsDispatchResults.collectAsState()
                     ActiveIncidentScreen(
                         elapsedSeconds = elapsedIncidentSeconds,
+                        smsResults = smsResults,
                         onEndIncident = {
                             scope.launch {
                                 val currentInc = stateMachine.currentIncident.value
@@ -614,12 +639,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun missingSmsPermission(): Array<String> =
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.SEND_SMS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) emptyArray() else arrayOf(android.Manifest.permission.SEND_SMS)
+
     private fun startMeshTransport() {
         if (!::meshTransport.isInitialized) {
             org.sahara.services.mesh.util.MeshLogger.w("MESH_START_ABORTED: meshTransport not yet initialized")
             return
         }
-        val missing = MeshPermissionManager.missingPermissions(this)
+        val missing = MeshPermissionManager.missingPermissions(this) + missingSmsPermission()
         if (missing.isNotEmpty()) {
             org.sahara.services.mesh.util.MeshLogger.i("PERMISSIONS_MISSING: Requesting ${missing.size} missing permissions via runtime launcher")
             meshPermissionLauncher.launch(missing)
