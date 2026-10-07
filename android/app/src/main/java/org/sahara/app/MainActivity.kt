@@ -92,7 +92,8 @@ enum class Screen {
     LEGAL_DRAFTING,
     ANCHORING,
     DETECTION_LOG,
-    SHEGUARD_REPORTING
+    SHEGUARD_REPORTING,
+    SETTINGS
 }
 
 class MainActivity : ComponentActivity() {
@@ -113,6 +114,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var preRollBuffer: BoundedAudioPreRollBuffer
     private lateinit var meshTransport: NearbyConnectionsTransport
     private lateinit var sheGuardMeshAdapter: SheGuardMeshAdapter
+
+    private val prefs by lazy { getSharedPreferences("sahara_prefs", Context.MODE_PRIVATE) }
+    private fun isOnboardingDone() = prefs.getBoolean("has_completed_onboarding", false)
+    private fun markOnboardingDone() = prefs.edit().putBoolean("has_completed_onboarding", true).apply()
 
     private var foregroundService: SafetyForegroundService? = null
     private var isServiceBound = false
@@ -259,7 +264,9 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun SaharaAppNavigation() {
-        var currentScreen by remember { mutableStateOf(Screen.HOME) }
+        var currentScreen by remember {
+            mutableStateOf(if (isOnboardingDone()) Screen.HOME else Screen.WELCOME)
+        }
         var isMonitoringActive by remember { mutableStateOf(true) }
         var activeIncidentState by remember { mutableStateOf(IncidentState.IDLE) }
         var recentExportPackage by remember { mutableStateOf<ExportPackage?>(null) }
@@ -324,7 +331,10 @@ class MainActivity : ComponentActivity() {
             }
             Screen.PREFERENCES -> {
                 QuickPreferencesScreen(
-                    onFinishSetup = { currentScreen = Screen.HOME },
+                    onFinishSetup = {
+                        markOnboardingDone()
+                        currentScreen = Screen.HOME
+                    },
                     onBack = { currentScreen = Screen.CIRCLE_SETUP }
                 )
             }
@@ -356,13 +366,19 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenCircle = { currentScreen = Screen.CIRCLE_MANAGE },
                     onOpenRecords = { currentScreen = Screen.INCIDENT_TIMELINE },
-                    onOpenSettings = { currentScreen = Screen.PREFERENCES },
+                    onOpenSettings = { currentScreen = Screen.SETTINGS },
                     onOpenDirectory = { currentScreen = Screen.HELP_DIRECTORY },
                     onOpenVerifier = { currentScreen = Screen.VERIFIER },
                     onOpenLegalDraft = { currentScreen = Screen.LEGAL_DRAFTING },
                     onOpenAnchoring = { currentScreen = Screen.ANCHORING },
                     onOpenDetectionLog = { currentScreen = Screen.DETECTION_LOG },
                     onOpenSheGuardReport = { currentScreen = Screen.SHEGUARD_REPORTING }
+                )
+            }
+            Screen.SETTINGS -> {
+                QuickPreferencesScreen(
+                    onFinishSetup = { currentScreen = Screen.HOME },
+                    onBack = { currentScreen = Screen.HOME }
                 )
             }
             Screen.DETECTION_LOG -> {
