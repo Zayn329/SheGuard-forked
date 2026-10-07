@@ -9,7 +9,14 @@ import android.os.IBinder
 import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -300,6 +307,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalAnimationApi::class)
     @Composable
     fun SaharaAppNavigation() {
         var currentScreen by remember {
@@ -331,227 +339,254 @@ class MainActivity : ComponentActivity() {
 
         val notifyContacts by contactRepository.getContacts().collectAsState(initial = emptyList())
 
-        when (currentScreen) {
-            Screen.WELCOME -> {
-                WelcomeScreen(
-                    onGetStarted = { currentScreen = Screen.PERMISSIONS },
-                    onLearnMore = { currentScreen = Screen.PERMISSIONS }
-                )
+        // Android back gesture / button walks back through the app instead of closing it.
+        // Home and Welcome exit as usual; an active emergency is never dismissed by accident.
+        BackHandler(
+            enabled = currentScreen != Screen.HOME &&
+                    currentScreen != Screen.WELCOME &&
+                    currentScreen != Screen.ACTIVE_INCIDENT
+        ) {
+            currentScreen = when (currentScreen) {
+                Screen.PERMISSIONS -> Screen.WELCOME
+                Screen.CIRCLE_SETUP -> Screen.PERMISSIONS
+                Screen.PREFERENCES -> Screen.CIRCLE_SETUP
+                else -> Screen.HOME
             }
-            Screen.PERMISSIONS -> {
-                PermissionsConsentScreen(
-                    onContinue = { currentScreen = Screen.CIRCLE_SETUP },
-                    onBack = { currentScreen = Screen.WELCOME }
-                )
-            }
-            Screen.CIRCLE_SETUP -> {
-                NotifyCircleSetupScreen(
-                    contacts = notifyContacts,
-                    onAddContact = { name, phone ->
-                        scope.launch {
-                            contactRepository.saveContact(
-                                org.sahara.core.domain.models.NotifyContact(
-                                    displayName = name,
-                                    type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                                    phoneNumber = phone
+        }
+
+        // Short cross-fade between screens instead of an instant hard cut.
+        AnimatedContent(
+            targetState = currentScreen,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                fadeIn(animationSpec = tween(durationMillis = 220, delayMillis = 40)) togetherWith
+                        fadeOut(animationSpec = tween(durationMillis = 120))
+            },
+            label = "screenTransition"
+        ) { screen ->
+            when (screen) {
+                Screen.WELCOME -> {
+                    WelcomeScreen(
+                        onGetStarted = { currentScreen = Screen.PERMISSIONS },
+                        onLearnMore = { currentScreen = Screen.PERMISSIONS }
+                    )
+                }
+                Screen.PERMISSIONS -> {
+                    PermissionsConsentScreen(
+                        onContinue = { currentScreen = Screen.CIRCLE_SETUP },
+                        onBack = { currentScreen = Screen.WELCOME }
+                    )
+                }
+                Screen.CIRCLE_SETUP -> {
+                    NotifyCircleSetupScreen(
+                        contacts = notifyContacts,
+                        onAddContact = { name, phone ->
+                            scope.launch {
+                                contactRepository.saveContact(
+                                    org.sahara.core.domain.models.NotifyContact(
+                                        displayName = name,
+                                        type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
+                                        phoneNumber = phone
+                                    )
                                 )
-                            )
-                        }
-                    },
-                    onRemoveContact = { contact ->
-                        scope.launch {
-                            contactRepository.deleteContact(contact.contactId)
-                        }
-                    },
-                    onContinue = { currentScreen = Screen.PREFERENCES },
-                    onBack = { currentScreen = Screen.PERMISSIONS }
-                )
-            }
-            Screen.PREFERENCES -> {
-                QuickPreferencesScreen(
-                    onFinishSetup = {
-                        markOnboardingDone()
-                        currentScreen = Screen.HOME
-                    },
-                    onBack = { currentScreen = Screen.CIRCLE_SETUP }
-                )
-            }
-            Screen.HOME -> {
-                HomeDashboardScreen(
-                    isMonitoringActive = isMonitoringActive,
-                    recentIncidentsCount = recordedIncidentsCount,
-                    onToggleMonitoring = { enabled -> setMonitoringEnabled(enabled) },
-                    onStartSafetyWatch = {
-                        currentScreen = Screen.SAFETY_WATCH
-                    },
-                    onNeedHelp = {
-                        scope.launch {
-                            panicController.triggerPanicImmediately("IN_APP_HELP_BUTTON")
-                            activeIncidentState = IncidentState.ACTIVE_INCIDENT
-                            currentScreen = Screen.ACTIVE_INCIDENT
-                        }
-                    },
-                    onOpenCircle = { currentScreen = Screen.CIRCLE_MANAGE },
-                    onOpenRecords = { currentScreen = Screen.INCIDENT_TIMELINE },
-                    onOpenSettings = { currentScreen = Screen.SETTINGS },
-                    onOpenDirectory = { currentScreen = Screen.HELP_DIRECTORY },
-                    onOpenVerifier = { currentScreen = Screen.VERIFIER },
-                    onOpenLegalDraft = { currentScreen = Screen.LEGAL_DRAFTING },
-                    onOpenAnchoring = { currentScreen = Screen.ANCHORING },
-                    onOpenDetectionLog = { currentScreen = Screen.DETECTION_LOG },
-                    onOpenSheGuardReport = { currentScreen = Screen.SHEGUARD_REPORTING }
-                )
-            }
-            Screen.SETTINGS -> {
-                QuickPreferencesScreen(
-                    onFinishSetup = { currentScreen = Screen.HOME },
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.DETECTION_LOG -> {
-                DetectionLogScreen(
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.SHEGUARD_REPORTING -> {
-                SheGuardReportingScreen(
-                    repository = microReportRepository,
-                    patternRepository = patternRepository,
-                    alertRepository = alertRepository,
-                    meshAdapter = sheGuardMeshAdapter,
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.SAFETY_WATCH -> {
-                SafetyWatchScreen(
-                    onImSafe = { currentScreen = Screen.HOME },
-                    onNeedHelpNow = {
-                        scope.launch {
-                            panicController.triggerPanicImmediately("SAFETY_WATCH_HELP_NOW")
-                            activeIncidentState = IncidentState.ACTIVE_INCIDENT
-                            currentScreen = Screen.ACTIVE_INCIDENT
-                        }
-                    }
-                )
-            }
-            Screen.ACTIVE_INCIDENT -> {
-                ActiveIncidentScreen(
-                    elapsedSeconds = elapsedIncidentSeconds,
-                    onEndIncident = {
-                        scope.launch {
-                            val currentInc = stateMachine.currentIncident.value
-                            if (currentInc != null) {
-                                captureEngine.processBufferedPreRoll(currentInc.incidentId)
-                                val entries = evidenceRepository.getEvidenceForIncident(currentInc.incidentId).first()
-                                if (entries.isNotEmpty()) {
-                                    val manifest = manifestManager.createAndSignManifest(currentInc, entries)
-                                    stateMachine.sealIncident(manifest.merkleRoot, manifest.sealedAt)
-                                } else {
-                                    stateMachine.cancelIncident()
-                                }
                             }
-                            currentScreen = Screen.INCIDENT_SEALED
-                        }
-                    }
-                )
-            }
-            Screen.INCIDENT_SEALED -> {
-                IncidentSealedScreen(
-                    onViewRecord = { currentScreen = Screen.INCIDENT_TIMELINE },
-                    onShareCircle = { currentScreen = Screen.TRUSTED_ALERT },
-                    onReturnHome = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.INCIDENT_TIMELINE -> {
-                IncidentTimelineScreen(
-                    onExportVerified = { currentScreen = Screen.VERIFIER },
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.TRUSTED_ALERT -> {
-                TrustedContactAlertScreen(
-                    onCheckIn = { currentScreen = Screen.HOME },
-                    onCall = { /* Initiates phone call */ },
-                    onGetDirections = { /* Opens map */ },
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.CIRCLE_MANAGE -> {
-                NotifyCircleManagementScreen(
-                    contacts = notifyContacts,
-                    onAddContact = { name, phone ->
-                        scope.launch {
-                            contactRepository.saveContact(
-                                org.sahara.core.domain.models.NotifyContact(
-                                    displayName = name,
-                                    type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
-                                    phoneNumber = phone
-                                )
-                            )
-                        }
-                    },
-                    onRemoveContact = { contact ->
-                        scope.launch {
-                            contactRepository.deleteContact(contact.contactId)
-                        }
-                    },
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.HELP_DIRECTORY -> {
-                HelpDirectoryScreen(
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.VERIFIER -> {
-                ExportVerifierScreen(
-                    exportPackage = recentExportPackage,
-                    onVerifyPackage = {
-                        scope.launch {
-                            val allIncidents = incidentRepository.getAllIncidents().first()
-                            val targetIncident = stateMachine.currentIncident.value ?: allIncidents.lastOrNull()
-                            if (targetIncident != null) {
-                                val entries = evidenceRepository.getEvidenceForIncident(targetIncident.incidentId).first()
-                                if (entries.isEmpty() || targetIncident.state != IncidentState.SEALED) {
-                                    recentExportPackage = EvidenceExporter.createExportPackage(
-                                        incident = targetIncident,
-                                        manifest = null,
-                                        evidenceEntries = entries,
-                                        outputDir = filesDir,
-                                        isIntegrityVerified = false
-                                    )
-                                } else {
-                                    val manifest = manifestManager.createAndSignManifest(targetIncident, entries)
-                                    val isVerified = EvidenceVerifier.verifyPackageIntegrity(
-                                        manifest = manifest,
-                                        evidenceEntries = entries,
-                                        keyStorageManager = keyManager,
-                                        incidentState = targetIncident.state
-                                    )
-                                    recentExportPackage = EvidenceExporter.createExportPackage(
-                                        incident = targetIncident,
-                                        manifest = manifest,
-                                        evidenceEntries = entries,
-                                        outputDir = filesDir,
-                                        isIntegrityVerified = isVerified
-                                    )
-                                }
-                            } else {
-                                recentExportPackage = null
+                        },
+                        onRemoveContact = { contact ->
+                            scope.launch {
+                                contactRepository.deleteContact(contact.contactId)
+                            }
+                        },
+                        onContinue = { currentScreen = Screen.PREFERENCES },
+                        onBack = { currentScreen = Screen.PERMISSIONS }
+                    )
+                }
+                Screen.PREFERENCES -> {
+                    QuickPreferencesScreen(
+                        onFinishSetup = {
+                            markOnboardingDone()
+                            currentScreen = Screen.HOME
+                        },
+                        onBack = { currentScreen = Screen.CIRCLE_SETUP }
+                    )
+                }
+                Screen.HOME -> {
+                    HomeDashboardScreen(
+                        isMonitoringActive = isMonitoringActive,
+                        recentIncidentsCount = recordedIncidentsCount,
+                        trustedContactCount = notifyContacts.size,
+                        onToggleMonitoring = { enabled -> setMonitoringEnabled(enabled) },
+                        onStartSafetyWatch = {
+                            currentScreen = Screen.SAFETY_WATCH
+                        },
+                        onNeedHelp = {
+                            scope.launch {
+                                panicController.triggerPanicImmediately("IN_APP_HELP_BUTTON")
+                                activeIncidentState = IncidentState.ACTIVE_INCIDENT
+                                currentScreen = Screen.ACTIVE_INCIDENT
+                            }
+                        },
+                        onOpenCircle = { currentScreen = Screen.CIRCLE_MANAGE },
+                        onOpenRecords = { currentScreen = Screen.INCIDENT_TIMELINE },
+                        onOpenSettings = { currentScreen = Screen.SETTINGS },
+                        onOpenDirectory = { currentScreen = Screen.HELP_DIRECTORY },
+                        onOpenVerifier = { currentScreen = Screen.VERIFIER },
+                        onOpenLegalDraft = { currentScreen = Screen.LEGAL_DRAFTING },
+                        onOpenAnchoring = { currentScreen = Screen.ANCHORING },
+                        onOpenDetectionLog = { currentScreen = Screen.DETECTION_LOG },
+                        onOpenSheGuardReport = { currentScreen = Screen.SHEGUARD_REPORTING }
+                    )
+                }
+                Screen.SETTINGS -> {
+                    QuickPreferencesScreen(
+                        onFinishSetup = { currentScreen = Screen.HOME },
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.DETECTION_LOG -> {
+                    DetectionLogScreen(
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.SHEGUARD_REPORTING -> {
+                    SheGuardReportingScreen(
+                        repository = microReportRepository,
+                        patternRepository = patternRepository,
+                        alertRepository = alertRepository,
+                        meshAdapter = sheGuardMeshAdapter,
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.SAFETY_WATCH -> {
+                    SafetyWatchScreen(
+                        onImSafe = { currentScreen = Screen.HOME },
+                        onNeedHelpNow = {
+                            scope.launch {
+                                panicController.triggerPanicImmediately("SAFETY_WATCH_HELP_NOW")
+                                activeIncidentState = IncidentState.ACTIVE_INCIDENT
+                                currentScreen = Screen.ACTIVE_INCIDENT
                             }
                         }
-                    },
-                    onBack = { currentScreen = Screen.HOME }
-                )
-            }
-            Screen.AUTH -> {
-                AuthScreen(onBack = { currentScreen = Screen.HOME })
-            }
-            Screen.LEGAL_DRAFTING -> {
-                org.sahara.app.ui.LegalDraftingScreen(onBack = { currentScreen = Screen.HOME })
-            }
-            Screen.ANCHORING -> {
-                AnchoringScreen(onBack = { currentScreen = Screen.HOME })
+                    )
+                }
+                Screen.ACTIVE_INCIDENT -> {
+                    ActiveIncidentScreen(
+                        elapsedSeconds = elapsedIncidentSeconds,
+                        onEndIncident = {
+                            scope.launch {
+                                val currentInc = stateMachine.currentIncident.value
+                                if (currentInc != null) {
+                                    captureEngine.processBufferedPreRoll(currentInc.incidentId)
+                                    val entries = evidenceRepository.getEvidenceForIncident(currentInc.incidentId).first()
+                                    if (entries.isNotEmpty()) {
+                                        val manifest = manifestManager.createAndSignManifest(currentInc, entries)
+                                        stateMachine.sealIncident(manifest.merkleRoot, manifest.sealedAt)
+                                    } else {
+                                        stateMachine.cancelIncident()
+                                    }
+                                }
+                                currentScreen = Screen.INCIDENT_SEALED
+                            }
+                        }
+                    )
+                }
+                Screen.INCIDENT_SEALED -> {
+                    IncidentSealedScreen(
+                        onViewRecord = { currentScreen = Screen.INCIDENT_TIMELINE },
+                        onShareCircle = { currentScreen = Screen.TRUSTED_ALERT },
+                        onReturnHome = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.INCIDENT_TIMELINE -> {
+                    IncidentTimelineScreen(
+                        onExportVerified = { currentScreen = Screen.VERIFIER },
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.TRUSTED_ALERT -> {
+                    TrustedContactAlertScreen(
+                        onCheckIn = { currentScreen = Screen.HOME },
+                        onCall = { /* Initiates phone call */ },
+                        onGetDirections = { /* Opens map */ },
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.CIRCLE_MANAGE -> {
+                    NotifyCircleManagementScreen(
+                        contacts = notifyContacts,
+                        onAddContact = { name, phone ->
+                            scope.launch {
+                                contactRepository.saveContact(
+                                    org.sahara.core.domain.models.NotifyContact(
+                                        displayName = name,
+                                        type = org.sahara.core.domain.models.ContactType.SMS_ONLY,
+                                        phoneNumber = phone
+                                    )
+                                )
+                            }
+                        },
+                        onRemoveContact = { contact ->
+                            scope.launch {
+                                contactRepository.deleteContact(contact.contactId)
+                            }
+                        },
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.HELP_DIRECTORY -> {
+                    HelpDirectoryScreen(
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.VERIFIER -> {
+                    ExportVerifierScreen(
+                        exportPackage = recentExportPackage,
+                        onVerifyPackage = {
+                            scope.launch {
+                                val allIncidents = incidentRepository.getAllIncidents().first()
+                                val targetIncident = stateMachine.currentIncident.value ?: allIncidents.lastOrNull()
+                                if (targetIncident != null) {
+                                    val entries = evidenceRepository.getEvidenceForIncident(targetIncident.incidentId).first()
+                                    if (entries.isEmpty() || targetIncident.state != IncidentState.SEALED) {
+                                        recentExportPackage = EvidenceExporter.createExportPackage(
+                                            incident = targetIncident,
+                                            manifest = null,
+                                            evidenceEntries = entries,
+                                            outputDir = filesDir,
+                                            isIntegrityVerified = false
+                                        )
+                                    } else {
+                                        val manifest = manifestManager.createAndSignManifest(targetIncident, entries)
+                                        val isVerified = EvidenceVerifier.verifyPackageIntegrity(
+                                            manifest = manifest,
+                                            evidenceEntries = entries,
+                                            keyStorageManager = keyManager,
+                                            incidentState = targetIncident.state
+                                        )
+                                        recentExportPackage = EvidenceExporter.createExportPackage(
+                                            incident = targetIncident,
+                                            manifest = manifest,
+                                            evidenceEntries = entries,
+                                            outputDir = filesDir,
+                                            isIntegrityVerified = isVerified
+                                        )
+                                    }
+                                } else {
+                                    recentExportPackage = null
+                                }
+                            }
+                        },
+                        onBack = { currentScreen = Screen.HOME }
+                    )
+                }
+                Screen.AUTH -> {
+                    AuthScreen(onBack = { currentScreen = Screen.HOME })
+                }
+                Screen.LEGAL_DRAFTING -> {
+                    org.sahara.app.ui.LegalDraftingScreen(onBack = { currentScreen = Screen.HOME })
+                }
+                Screen.ANCHORING -> {
+                    AnchoringScreen(onBack = { currentScreen = Screen.HOME })
+                }
             }
         }
     }

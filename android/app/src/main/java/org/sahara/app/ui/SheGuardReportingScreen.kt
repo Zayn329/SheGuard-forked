@@ -273,17 +273,19 @@ fun SheGuardReportingScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SheGuardColors.SurfaceCard)
-                .border(width = 1.dp, color = SheGuardColors.BorderSubtle, shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
                 .shadow(4.dp, RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp), spotColor = SheGuardColors.Primary.copy(alpha = 0.1f))
+                .background(SheGuardColors.SurfaceCard, RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                .border(width = 1.dp, color = SheGuardColors.BorderSubtle, shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -295,7 +297,7 @@ fun SheGuardReportingScreen(
                         Text(text = "🛡️", fontSize = 20.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "SheGuard Micro-Report",
                             style = MaterialTheme.typography.titleLarge.copy(
@@ -313,13 +315,14 @@ fun SheGuardReportingScreen(
                     }
                 }
                 if (onBack != null) {
+                    Spacer(modifier = Modifier.width(10.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(SheGuardColors.PrimaryContainer)
                             .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(12.dp))
                             .clickable { onBack() }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
                             text = "✕ Close",
@@ -394,7 +397,7 @@ fun SheGuardReportingScreen(
                     ) {
                         Text(text = "✓", color = SheGuardColors.EmeraldSuccess, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Micro-Report Saved Locally!",
                                 color = SheGuardColors.EmeraldText,
@@ -423,7 +426,6 @@ fun SheGuardReportingScreen(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -431,7 +433,10 @@ fun SheGuardReportingScreen(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = SheGuardColors.TextPrimary
-                            )
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
                         Box(
                             modifier = Modifier
@@ -464,7 +469,9 @@ fun SheGuardReportingScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (i in categories.indices step 2) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 val cat1 = categories[i]
@@ -474,7 +481,7 @@ fun SheGuardReportingScreen(
                                     category = cat1,
                                     isSelected = selectedCategory == cat1,
                                     onClick = { selectedCategory = cat1 },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
                                 )
 
                                 if (cat2 != null) {
@@ -482,7 +489,7 @@ fun SheGuardReportingScreen(
                                         category = cat2,
                                         isSelected = selectedCategory == cat2,
                                         onClick = { selectedCategory = cat2 },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f).fillMaxHeight()
                                     )
                                 } else {
                                     Spacer(modifier = Modifier.weight(1f))
@@ -490,8 +497,6 @@ fun SheGuardReportingScreen(
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -512,11 +517,13 @@ fun SheGuardReportingScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
                                 ) {
                                     Text(text = "📍", fontSize = 16.sp)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "Device Location Context",
                                             style = MaterialTheme.typography.labelSmall.copy(
@@ -608,12 +615,14 @@ fun SheGuardReportingScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        verticalAlignment = Alignment.Top
                                     ) {
                                         Text(
                                             text = String.format(Locale.US, "Coords: %.4f° N, %.4f° E", state.location.latitude, state.location.longitude),
-                                            style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.TextMuted, fontSize = 10.sp)
+                                            style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.TextMuted, fontSize = 10.sp),
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = state.location.getAccuracyDescription(),
                                             style = MaterialTheme.typography.labelSmall.copy(
@@ -761,19 +770,23 @@ fun SheGuardReportingScreen(
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
                                         Text(text = "🚨", fontSize = 18.sp)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "ALERT: ${alertEngine.categoryDisplayName(alert.category)}",
                                             color = trustTextColor,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
+                                            fontSize = 15.sp,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
@@ -846,7 +859,8 @@ fun SheGuardReportingScreen(
                                 text = "Phase C · Multi-Signal Verified Emerging Patterns (${emergingPatterns.size})",
                                 color = SheGuardColors.EmeraldText,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -880,7 +894,8 @@ fun SheGuardReportingScreen(
                                 text = "Phase B · Detected Candidate Patterns (${candidatePatterns.size})",
                                 color = SheGuardColors.AmberText,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -914,7 +929,6 @@ fun SheGuardReportingScreen(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -922,7 +936,10 @@ fun SheGuardReportingScreen(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = SheGuardColors.TextPrimary
-                            )
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
                         Text(
                             text = "Room Storage (Local)",
@@ -953,14 +970,16 @@ fun SheGuardReportingScreen(
                                     Column {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
                                                 text = report.category.name.replace("_", " "),
                                                 color = SheGuardColors.Primary,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp
+                                                fontSize = 13.sp,
+                                                modifier = Modifier.weight(1f)
                                             )
+                                            Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(report.timestamp)),
                                                 color = SheGuardColors.TextMuted,
@@ -1045,24 +1064,25 @@ private fun HazardCategoryChip(
                 shape = RoundedCornerShape(14.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = icon, fontSize = 15.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = displayName,
-                    color = if (isSelected) SheGuardColors.Primary else SheGuardColors.TextPrimary,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    fontSize = 12.sp
-                )
-            }
+            Text(text = icon, fontSize = 15.sp)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = displayName,
+                color = if (isSelected) SheGuardColors.Primary else SheGuardColors.TextPrimary,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f)
+            )
             if (isSelected) {
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(text = "✓", color = SheGuardColors.Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }

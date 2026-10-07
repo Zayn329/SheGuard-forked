@@ -3,6 +3,7 @@ package org.sahara.app.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -15,7 +16,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +53,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -72,60 +80,67 @@ fun WelcomeScreen(
             .fillMaxSize()
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Brand & SheGuard Shield Icon
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 20.dp)
+        // Brand block: centred when there is room, scrolls on small screens (buttons stay pinned below).
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(140.dp)
-                    .clip(CircleShape)
-                    .background(SheGuardColors.PrimaryContainer)
-                    .border(2.dp, SheGuardColors.PrimaryLight, CircleShape),
-                contentAlignment = Alignment.Center
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(132.dp)
+                        .clip(CircleShape)
+                        .background(SheGuardColors.PrimaryContainer)
+                        .border(2.dp, SheGuardColors.PrimaryLight, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "🛡️",
+                        fontSize = 54.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(26.dp))
+
                 Text(
-                    text = "🛡️",
-                    fontSize = 54.sp
+                    text = "SheGuard",
+                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = SheGuardColors.TextPrimary
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Offline-First Safety & Community Warning",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SheGuardColors.CyanAccent
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Anonymous micro-reporting, on-device spatio-temporal risk pattern detection, multi-signal trust verification, and peer mesh early warnings — without cloud dependence.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    color = SheGuardColors.TextSecondary,
+                    lineHeight = 22.sp
                 )
             }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Text(
-                text = "SheGuard",
-                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.ExtraBold,
-                color = SheGuardColors.TextPrimary
-            )
-
-            Text(
-                text = "Offline-First Safety & Community Warning",
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.SemiBold,
-                color = SheGuardColors.CyanLight
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Anonymous micro-reporting, on-device spatio-temporal risk pattern detection, multi-signal trust verification, and peer mesh early warnings — without cloud dependence.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                color = SheGuardColors.TextSecondary,
-                lineHeight = 22.sp
-            )
         }
 
-        // Action Buttons
+        Spacer(modifier = Modifier.height(20.dp))
+
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -138,7 +153,6 @@ fun WelcomeScreen(
                 text = "How SheGuard Works",
                 onClick = onLearnMore
             )
-            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }
@@ -158,14 +172,7 @@ fun PermissionsConsentScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -259,7 +266,7 @@ private fun PermissionCard(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = SheGuardColors.CyanLight
+                    color = SheGuardColors.CyanAccent
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -287,6 +294,15 @@ fun NotifyCircleSetupScreen(
 ) {
     var contactName by remember { mutableStateOf("") }
     var contactPhone by remember { mutableStateOf("") }
+    val callNumber = rememberDirectCaller()
+
+    fun submitContact() {
+        if (contactName.isNotBlank() && contactPhone.isNotBlank()) {
+            onAddContact(contactName.trim(), contactPhone.trim())
+            contactName = ""
+            contactPhone = ""
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -294,16 +310,9 @@ fun NotifyCircleSetupScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         SaharaSectionHeader(
             title = "Trusted Circle Setup",
@@ -315,7 +324,8 @@ fun NotifyCircleSetupScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .animateContentSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             contacts.forEach { contact ->
@@ -324,7 +334,8 @@ fun NotifyCircleSetupScreen(
                     relation = contact.phoneNumber ?: "Direct Contact",
                     status = "Trusted",
                     avatarColor = SheGuardColors.PrimaryContainer,
-                    onRemove = { onRemoveContact(contact) }
+                    onRemove = { onRemoveContact(contact) },
+                    onCall = contact.phoneNumber?.let { number -> { callNumber(number) } }
                 )
             }
 
@@ -338,55 +349,31 @@ fun NotifyCircleSetupScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "+ Add a trusted contact",
+                            text = "+ Add a trusted contact (${contacts.size}/3)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = SheGuardColors.CyanLight
+                            color = SheGuardColors.CyanAccent
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedTextField(
+                        SaharaTextField(
                             value = contactName,
                             onValueChange = { contactName = it },
-                            placeholder = { Text("Contact Name", color = SheGuardColors.TextMuted) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SheGuardColors.SurfaceElevated,
-                                unfocusedContainerColor = SheGuardColors.SurfaceElevated,
-                                focusedBorderColor = SheGuardColors.Primary,
-                                unfocusedBorderColor = SheGuardColors.BorderSubtle,
-                                focusedTextColor = SheGuardColors.TextPrimary,
-                                unfocusedTextColor = SheGuardColors.TextPrimary
-                            )
+                            placeholder = "Contact Name",
+                            imeAction = ImeAction.Next
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
+                        SaharaTextField(
                             value = contactPhone,
                             onValueChange = { contactPhone = it },
-                            placeholder = { Text("Phone (+91 ...)", color = SheGuardColors.TextMuted) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SheGuardColors.SurfaceElevated,
-                                unfocusedContainerColor = SheGuardColors.SurfaceElevated,
-                                focusedBorderColor = SheGuardColors.Primary,
-                                unfocusedBorderColor = SheGuardColors.BorderSubtle,
-                                focusedTextColor = SheGuardColors.TextPrimary,
-                                unfocusedTextColor = SheGuardColors.TextPrimary
-                            )
+                            placeholder = "Phone (+91 ...)",
+                            keyboardType = KeyboardType.Phone,
+                            imeAction = ImeAction.Done,
+                            onImeDone = { submitContact() }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         SaharaSecondaryButton(
                             text = "Add to Circle",
-                            onClick = {
-                                if (contactName.isNotBlank() && contactPhone.isNotBlank()) {
-                                    onAddContact(contactName, contactPhone)
-                                    contactName = ""
-                                    contactPhone = ""
-                                }
-                            }
+                            onClick = { submitContact() }
                         )
                     }
                 }
@@ -438,14 +425,7 @@ fun QuickPreferencesScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -501,6 +481,7 @@ fun QuickPreferencesScreen(
 fun HomeDashboardScreen(
     isMonitoringActive: Boolean,
     recentIncidentsCount: Int = 0,
+    trustedContactCount: Int = 0,
     onToggleMonitoring: (Boolean) -> Unit,
     onStartSafetyWatch: () -> Unit,
     onNeedHelp: () -> Unit,
@@ -531,16 +512,16 @@ fun HomeDashboardScreen(
             // Top Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "SheGuard",
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.ExtraBold,
-                            color = SheGuardColors.TextPrimary
+                            color = SheGuardColors.TextPrimary,
+                            maxLines = 1
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
@@ -554,20 +535,25 @@ fun HomeDashboardScreen(
                                 text = "OFFLINE FIRST",
                                 color = SheGuardColors.EmeraldText,
                                 fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
                             )
                         }
                     }
                     Text(
                         text = "Intelligent Community Safety System",
                         style = MaterialTheme.typography.bodySmall,
-                        color = SheGuardColors.TextSecondary
+                        color = SheGuardColors.TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                Spacer(modifier = Modifier.width(12.dp))
+
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
                         .background(SheGuardColors.SurfaceElevated)
                         .border(1.dp, SheGuardColors.BorderSubtle, CircleShape)
@@ -578,7 +564,7 @@ fun HomeDashboardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Central Animated Radar & Monitoring Toggle
             BreathingSafetyVisual(
@@ -586,13 +572,15 @@ fun HomeDashboardScreen(
                 isActive = isMonitoringActive
             )
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .clickable { onToggleMonitoring(!isMonitoringActive) }
             ) {
                 SaharaStatusBadge(
-                    text = if (isMonitoringActive) "● Safety Monitoring: ACTIVE (Tap to pause)" else "○ Safety Monitoring: STANDBY (Tap to start)",
+                    text = if (isMonitoringActive) "● Monitoring ACTIVE · tap to pause" else "○ Monitoring STANDBY · tap to start",
                     style = if (isMonitoringActive) BadgeStyle.SUCCESS else BadgeStyle.NEUTRAL
                 )
             }
@@ -604,6 +592,7 @@ fun HomeDashboardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, SheGuardColors.PrimaryLight.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .clickable { onOpenSheGuardReport() },
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = SheGuardColors.SurfaceCard)
@@ -611,38 +600,37 @@ fun HomeDashboardScreen(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "🚨", fontSize = 22.sp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "SheGuard Safety Pipeline",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SheGuardColors.TextPrimary
-                                )
-                                Text(
-                                    text = "Report → Detect → Trust → Alert → Mesh",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SheGuardColors.CyanLight,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                        Text(text = "🚨", fontSize = 22.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "SheGuard Safety Pipeline",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SheGuardColors.TextPrimary
+                            )
+                            Text(
+                                text = "Report → Detect → Trust → Alert → Mesh",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SheGuardColors.CyanAccent,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(SheGuardColors.Primary)
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 12.dp, vertical = 7.dp)
                         ) {
                             Text(
                                 text = "Open →",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                maxLines = 1
                             )
                         }
                     }
@@ -677,23 +665,30 @@ fun HomeDashboardScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // 4-Card Live System Status Grid
+            // 4-Card Live System Status Grid (cards in a row always share the same height)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 CompactStatusItem(
                     title = "Trusted Circle",
-                    status = "2 Contacts · Ready",
+                    status = if (trustedContactCount > 0) {
+                        "$trustedContactCount Contact${if (trustedContactCount == 1) "" else "s"} · Ready"
+                    } else {
+                        "No contacts yet · Tap to add"
+                    },
                     icon = "👥",
-                    modifier = Modifier.weight(1f),
+                    isReady = trustedContactCount > 0,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = onOpenCircle
                 )
                 CompactStatusItem(
                     title = "Mesh Relay",
                     status = "BLE / P2P Ready",
                     icon = "📡",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = onOpenSheGuardReport
                 )
             }
@@ -701,21 +696,23 @@ fun HomeDashboardScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 CompactStatusItem(
                     title = "Incident Records",
                     status = if (recentIncidentsCount > 0) "$recentIncidentsCount Sealed Record(s)" else "Quiet · 0 Active",
                     icon = "📋",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = onOpenRecords
                 )
                 CompactStatusItem(
                     title = "Help Directory",
                     status = "Mumbai 100 / 1090",
                     icon = "📞",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = onOpenDirectory
                 )
             }
@@ -724,12 +721,14 @@ fun HomeDashboardScreen(
 
             // Supporting Tools Row
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MiniToolButton("Export & Verify", onClick = onOpenVerifier, modifier = Modifier.weight(1f))
-                MiniToolButton("AI FIR Drafter", onClick = onOpenLegalDraft, modifier = Modifier.weight(1f))
-                MiniToolButton("Anchoring", onClick = onOpenAnchoring, modifier = Modifier.weight(1f))
+                MiniToolButton("Export & Verify", onClick = onOpenVerifier, modifier = Modifier.weight(1f).fillMaxHeight())
+                MiniToolButton("AI FIR Drafter", onClick = onOpenLegalDraft, modifier = Modifier.weight(1f).fillMaxHeight())
+                MiniToolButton("Anchoring", onClick = onOpenAnchoring, modifier = Modifier.weight(1f).fillMaxHeight())
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -738,6 +737,8 @@ fun HomeDashboardScreen(
                 text = "📊 View Real-Time Detection Log",
                 onClick = onOpenDetectionLog
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
         // Bottom Navigation Bar
@@ -761,11 +762,13 @@ private fun CompactStatusItem(
     status: String,
     icon: String,
     modifier: Modifier = Modifier,
+    isReady: Boolean = true,
     onClick: () -> Unit
 ) {
     Card(
         modifier = modifier
             .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = SheGuardColors.SurfaceCard)
@@ -781,7 +784,7 @@ private fun CompactStatusItem(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(SheGuardColors.EmeraldSuccess)
+                        .background(if (isReady) SheGuardColors.EmeraldSuccess else SheGuardColors.AmberWarning)
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -789,7 +792,9 @@ private fun CompactStatusItem(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = SheGuardColors.TextPrimary
+                color = SheGuardColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = status,
@@ -812,14 +817,15 @@ private fun MiniToolButton(
             .background(SheGuardColors.SurfaceElevated)
             .border(1.dp, SheGuardColors.BorderSubtle, RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(vertical = 10.dp),
+            .padding(horizontal = 6.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
-            color = SheGuardColors.CyanLight
+            textAlign = TextAlign.Center,
+            color = SheGuardColors.CyanAccent
         )
     }
 }
@@ -838,10 +844,15 @@ fun SafetyWatchScreen(
             .fillMaxSize()
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Scrollable status area; the two action buttons below always stay visible.
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
             Box(
                 modifier = Modifier
                     .size(76.dp)
@@ -899,6 +910,8 @@ fun SafetyWatchScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Actions
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -932,12 +945,14 @@ fun ActiveIncidentScreen(
             .fillMaxSize()
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // weight(1f) keeps the "I'm Safe" hold button pinned and on-screen even when the content is tall.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.verticalScroll(rememberScrollState())
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
         ) {
             Box(
                 modifier = Modifier
@@ -985,7 +1000,10 @@ fun ActiveIncidentScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
@@ -997,14 +1015,15 @@ fun ActiveIncidentScreen(
                             text = "Securing Evidence",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = SheGuardColors.RoseText
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = formattedTime,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
+                        color = SheGuardColors.RoseText
                     )
                 }
             }
@@ -1060,7 +1079,8 @@ fun ActiveIncidentScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Aisha (Sister)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary)
+                                Text("Aisha (Sister)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Delivered ✓", color = SheGuardColors.EmeraldText, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -1068,8 +1088,9 @@ fun ActiveIncidentScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Sara (Friend)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary)
-                                Text("Dispatching... ⟳", color = SheGuardColors.CyanLight, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                                Text("Sara (Friend)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Dispatching... ⟳", color = SheGuardColors.CyanAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -1112,7 +1133,7 @@ private fun ActionRowItem(
             )
         }
         Spacer(modifier = Modifier.width(10.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1143,12 +1164,13 @@ fun IncidentSealedScreen(
             .fillMaxSize()
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.verticalScroll(rememberScrollState())
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -1198,7 +1220,7 @@ fun IncidentSealedScreen(
                 ) {
                     Text(text = "🛡️", fontSize = 22.sp)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Merkle Integrity Verified",
                             style = MaterialTheme.typography.titleMedium,
@@ -1240,6 +1262,8 @@ fun IncidentSealedScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Actions
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -1262,11 +1286,24 @@ private fun SummaryRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextSecondary)
-        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = SheGuardColors.TextPrimary)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = SheGuardColors.TextSecondary,
+            modifier = Modifier.widthIn(max = 130.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color = SheGuardColors.TextPrimary,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -1285,14 +1322,7 @@ fun IncidentTimelineScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1352,14 +1382,7 @@ fun TrustedContactAlertScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1399,7 +1422,7 @@ fun TrustedContactAlertScreen(
                         Text(text = "M", color = SheGuardColors.RoseDanger, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     }
                     Spacer(modifier = Modifier.width(14.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(text = "Maya", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = SheGuardColors.TextPrimary)
                         SaharaStatusBadge(text = "Emergency Mode Activated", style = BadgeStyle.WARNING)
                     }
@@ -1463,6 +1486,15 @@ fun NotifyCircleManagementScreen(
     var syncStatus by remember { mutableStateOf<String?>(null) }
     var isSyncing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val callNumber = rememberDirectCaller()
+
+    fun submitContact() {
+        if (newName.isNotBlank() && newPhone.isNotBlank()) {
+            onAddContact(newName.trim(), newPhone.trim())
+            newName = ""
+            newPhone = ""
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1470,16 +1502,9 @@ fun NotifyCircleManagementScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         SaharaSectionHeader(
             title = "Manage Trusted Circle",
@@ -1491,7 +1516,8 @@ fun NotifyCircleManagementScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .animateContentSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             contacts.forEach { contact ->
@@ -1500,7 +1526,8 @@ fun NotifyCircleManagementScreen(
                     relation = contact.phoneNumber ?: "Direct Contact",
                     status = "Ready",
                     avatarColor = SheGuardColors.PrimaryContainer,
-                    onRemove = { onRemoveContact(contact) }
+                    onRemove = { onRemoveContact(contact) },
+                    onCall = contact.phoneNumber?.let { number -> { callNumber(number) } }
                 )
             }
 
@@ -1517,52 +1544,28 @@ fun NotifyCircleManagementScreen(
                             text = "+ Add Contact (${contacts.size}/3)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = SheGuardColors.CyanLight
+                            color = SheGuardColors.CyanAccent
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedTextField(
+                        SaharaTextField(
                             value = newName,
                             onValueChange = { newName = it },
-                            placeholder = { Text("Contact Name", color = SheGuardColors.TextMuted) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SheGuardColors.SurfaceElevated,
-                                unfocusedContainerColor = SheGuardColors.SurfaceElevated,
-                                focusedBorderColor = SheGuardColors.Primary,
-                                unfocusedBorderColor = SheGuardColors.BorderSubtle,
-                                focusedTextColor = SheGuardColors.TextPrimary,
-                                unfocusedTextColor = SheGuardColors.TextPrimary
-                            )
+                            placeholder = "Contact Name",
+                            imeAction = ImeAction.Next
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
+                        SaharaTextField(
                             value = newPhone,
                             onValueChange = { newPhone = it },
-                            placeholder = { Text("Phone Number", color = SheGuardColors.TextMuted) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SheGuardColors.SurfaceElevated,
-                                unfocusedContainerColor = SheGuardColors.SurfaceElevated,
-                                focusedBorderColor = SheGuardColors.Primary,
-                                unfocusedBorderColor = SheGuardColors.BorderSubtle,
-                                focusedTextColor = SheGuardColors.TextPrimary,
-                                unfocusedTextColor = SheGuardColors.TextPrimary
-                            )
+                            placeholder = "Phone Number",
+                            keyboardType = KeyboardType.Phone,
+                            imeAction = ImeAction.Done,
+                            onImeDone = { submitContact() }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         SaharaPrimaryButton(
                             text = "Add Contact",
-                            onClick = {
-                                if (newName.isNotBlank() && newPhone.isNotBlank()) {
-                                    onAddContact(newName, newPhone)
-                                    newName = ""
-                                    newPhone = ""
-                                }
-                            }
+                            onClick = { submitContact() }
                         )
                     }
                 }
@@ -1622,14 +1625,7 @@ fun HelpDirectoryScreen(onBack: () -> Unit) {
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1661,13 +1657,20 @@ fun HelpDirectoryScreen(onBack: () -> Unit) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = contact.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = SheGuardColors.TextPrimary)
+                            Text(
+                                text = contact.name,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = SheGuardColors.TextPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
                             SaharaStatusBadge(text = "📞 ${contact.phone}", style = BadgeStyle.INFO)
                         }
-                        Text(text = "City: ${contact.city} · Tap to call", style = MaterialTheme.typography.bodySmall, color = SheGuardColors.CyanLight)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(text = "City: ${contact.city} · Tap to call", style = MaterialTheme.typography.bodySmall, color = SheGuardColors.CyanAccent)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(text = contact.description, style = MaterialTheme.typography.bodySmall, color = SheGuardColors.TextSecondary)
                     }
@@ -1689,14 +1692,7 @@ fun ExportVerifierScreen(
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1783,14 +1779,7 @@ fun LegalDraftingScreen(onBack: () -> Unit) {
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1945,14 +1934,7 @@ fun AnchoringScreen(onBack: () -> Unit) {
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -2017,7 +1999,7 @@ fun AnchoringScreen(onBack: () -> Unit) {
                     }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Status: $anchorStatus", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = SheGuardColors.CyanLight)
+                Text("Status: $anchorStatus", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = SheGuardColors.CyanAccent)
                 if (txHash != null) {
                     Text("Tx Hash: $txHash", style = MaterialTheme.typography.bodySmall, color = SheGuardColors.EmeraldText)
                 }
@@ -2124,14 +2106,7 @@ fun AuthScreen(onBack: () -> Unit) {
             .background(SheGuardColors.Background)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "← Back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SheGuardColors.TextSecondary,
-            modifier = Modifier
-                .clickable { onBack() }
-                .padding(vertical = 8.dp)
-        )
+        SaharaBackLink(onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
 
