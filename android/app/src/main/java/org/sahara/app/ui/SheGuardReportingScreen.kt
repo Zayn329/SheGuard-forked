@@ -27,8 +27,16 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import org.sahara.app.location.DeviceLocationManager
 import org.sahara.app.location.LocationState
@@ -50,6 +58,13 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
 
+/** Safely unwraps a Context (possibly wrapped by Compose/Hilt/etc.) to its Activity. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SheGuardReportingScreen(
@@ -66,30 +81,46 @@ fun SheGuardReportingScreen(
     val locationManager = remember { DeviceLocationManager(context) }
     var locationState by remember { mutableStateOf<LocationState>(LocationState.Idle) }
 
+    val activity = remember(context) { context.findActivity() }
+    val locationPermissions = arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+
+    fun shouldShowRationale(): Boolean {
+        val act = activity ?: return false
+        return locationPermissions.any {
+            ActivityCompat.shouldShowRequestPermissionRationale(act, it)
+        }
+    }
+
+    val permanentDenialError = LocationState.Error(
+        message = "Location permission permanently denied. Enable it in App Settings to use location features.",
+        isGpsDisabled = false
+    )
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (fineGranted || coarseGranted) {
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
             coroutineScope.launch {
                 locationState = LocationState.Fetching
                 locationState = locationManager.getCurrentDeviceLocation()
             }
         } else {
-            locationState = LocationState.PermissionRequired
+            // A request just happened, so rationale == false means permanent denial
+            locationState = if (shouldShowRationale()) LocationState.PermissionRequired
+            else permanentDenialError
         }
     }
 
     fun refreshDeviceLocation() {
         coroutineScope.launch {
             if (!locationManager.hasAnyLocationPermission()) {
-                locationPermissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
-                )
+                locationState = LocationState.PermissionRequired
+                locationPermissionLauncher.launch(locationPermissions)
             } else {
                 locationState = LocationState.Fetching
                 locationState = locationManager.getCurrentDeviceLocation()
@@ -97,17 +128,93 @@ fun SheGuardReportingScreen(
         }
     }
 
+    // Initialize location state
+    var permissionRequested by remember { mutableStateOf(false) }
+    var settingsRequested by remember { mutableStateOf(false) }
+
+    // Launcher for Android Settings
+    val settingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        // When returning from Settings, re-check location state
+        settingsRequested = false
+        if (locationManager.hasAnyLocationPermission() && locationManager.isLocationServicesEnabled()) {
+            coroutineScope.launch {
+                locationState = LocationState.Fetching
+                locationState = locationManager.getCurrentDeviceLocation()
+            }
+        } else if (locationManager.hasAnyLocationPermission()) {
+            locationState = LocationState.Error(
+                message = "Location Services are disabled. Enable GPS or network location in Settings to use this feature.",
+                isGpsDisabled = true
+            )
+        }
+    }
+
+    // Helper function to get appropriate action text based on location state
+    fun getLocationActionText(): String {
+        return when (locationState) {
+            is LocationState.Error -> {
+                if ((locationState as LocationState.Error).isGpsDisabled) {
+                    "Turn On Location"
+                } else if (!locationManager.hasAnyLocationPermission()) {
+                    "Open Settings"
+                } else {
+                    "Retry GPS"
+                }
+            }
+            is LocationState.PermissionRequired -> "Retry GPS"
+            else -> "🔄 Refresh"
+        }
+    }
+
+    // Helper function to handle location action based on state
+    fun handleLocationAction() {
+        when (locationState) {
+            is LocationState.Error -> {
+                if ((locationState as LocationState.Error).isGpsDisabled) {
+                    // Location services disabled - open Android Settings
+                    settingsRequested = true
+                    settingsLauncher.launch(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                } else if (!locationManager.hasAnyLocationPermission()) {
+                    // Permission permanently denied - open this app's settings page
+                    settingsRequested = true
+                    settingsLauncher.launch(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(Uri.fromParts("package", context.packageName, null))
+                    )
+                } else {
+                    // Other error - refresh location
+                    refreshDeviceLocation()
+                }
+            }
+            is LocationState.PermissionRequired -> {
+                // Permission needed - request permissions
+                permissionRequested = true
+                locationPermissionLauncher.launch(locationPermissions)
+            }
+            else -> {
+                // Default case - refresh location
+                refreshDeviceLocation()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
-        if (locationManager.hasAnyLocationPermission()) {
+        if (!locationManager.hasAnyLocationPermission()) {
+            permissionRequested = true
+            locationState = LocationState.PermissionRequired
+            locationPermissionLauncher.launch(locationPermissions)
+        } else if (!locationManager.isLocationServicesEnabled()) {
+            // Permission granted but location services disabled
+            locationState = LocationState.Error(
+                message = "Location Services are disabled. Enable GPS or network location in Settings to use this feature.",
+                isGpsDisabled = true
+            )
+        } else {
+            // Permission already granted and location services enabled, get location
             locationState = LocationState.Fetching
             locationState = locationManager.getCurrentDeviceLocation()
-        } else {
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
         }
     }
 
@@ -126,8 +233,10 @@ fun SheGuardReportingScreen(
     val isMeshConnected = transportStatus == org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTED
 
     val reportsState by repository.getAllReports().collectAsState(initial = emptyList())
-    val persistedAlerts by (alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList())
-        ?: remember { mutableStateOf(emptyList()) })
+    val persistedAlerts: List<RisingPatternAlert> by (
+            alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList<RisingPatternAlert>())
+                ?: remember { mutableStateOf(emptyList<RisingPatternAlert>()) }
+            )
 
     val patternEngine = remember { SpatioTemporalPatternEngine() }
     val trustEvaluator = remember { TrustAndAntiGamingEvaluator() }
@@ -447,7 +556,7 @@ fun SheGuardReportingScreen(
                                             }
                                             is LocationState.Error -> {
                                                 Text(
-                                                    text = "Location Unavailable",
+                                                    text = state.message,
                                                     style = MaterialTheme.typography.bodySmall.copy(
                                                         color = SheGuardColors.RoseText,
                                                         fontWeight = FontWeight.Bold
@@ -475,17 +584,17 @@ fun SheGuardReportingScreen(
                                     }
                                 }
 
-                                // Action / Refresh / Retry button
+                                // Action button - changes based on location state
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(SheGuardColors.PrimaryContainer)
                                         .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(8.dp))
-                                        .clickable { refreshDeviceLocation() }
+                                        .clickable { handleLocationAction() }
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = if (locationState is LocationState.Error || locationState is LocationState.PermissionRequired) "Retry GPS" else "🔄 Refresh",
+                                        text = getLocationActionText(),
                                         color = SheGuardColors.Primary,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
