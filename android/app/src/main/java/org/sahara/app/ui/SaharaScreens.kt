@@ -582,7 +582,8 @@ fun HomeDashboardScreen(
 
             // Central Animated Radar & Monitoring Toggle
             BreathingSafetyVisual(
-                statusText = if (isMonitoringActive) "SheGuard Active" else "SheGuard Standby"
+                statusText = if (isMonitoringActive) "SheGuard Active" else "SheGuard Standby",
+                isActive = isMonitoringActive
             )
 
             Box(
@@ -1886,12 +1887,12 @@ fun LegalDraftingScreen(onBack: () -> Unit) {
                                 }
                             } catch (e: Exception) {
                                 generatedDraft = "DRAFT FOR HUMAN AND LEGAL REVIEW. THIS DOCUMENT HAS NOT BEEN FILED WITH ANY AUTHORITY.\n\n" +
-                                    "[OFFLINE FALLBACK DRAFT]\n" +
-                                    "FIRST INFORMATION REPORT (DRAFT)\n\n" +
-                                    "Incident Context: $incidentSummary\n" +
-                                    "Complainant/Victim: $victimName\n" +
-                                    "Location: $locationText\n\n" +
-                                    "Statement: The complainant reported a distress situation requiring emergency assistance. Structured facts preserved locally."
+                                        "[OFFLINE FALLBACK DRAFT]\n" +
+                                        "FIRST INFORMATION REPORT (DRAFT)\n\n" +
+                                        "Incident Context: $incidentSummary\n" +
+                                        "Complainant/Victim: $victimName\n" +
+                                        "Location: $locationText\n\n" +
+                                        "Statement: The complainant reported a distress situation requiring emergency assistance. Structured facts preserved locally."
                             } finally {
                                 isLoading = false
                             }

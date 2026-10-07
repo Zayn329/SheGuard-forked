@@ -84,6 +84,37 @@ class SafetyForegroundService : Service(), SensorEventListener {
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + Job())
 
+    private val pauseLock = Object()
+    @Volatile var isDetectionPaused = false
+        private set
+
+    /**
+     * Pauses/resumes on-device detection. While paused the microphone and accelerometer are
+     * released and detector signals are ignored. The single audio thread and the single timeout
+     * loop are never recreated, so repeated calls cannot create duplicate jobs.
+     */
+    fun setDetectionPaused(paused: Boolean) {
+        synchronized(pauseLock) {
+            if (isDetectionPaused == paused) return
+            isDetectionPaused = paused
+            if (paused) {
+                sensorManager?.unregisterListener(this)
+                if (isRecordingAudio) {
+                    try { audioRecord?.stop() } catch (_: Throwable) {}
+                }
+            } else {
+                accelerometer?.let {
+                    sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+                }
+                if (isRecordingAudio) {
+                    try { audioRecord?.startRecording() } catch (_: Throwable) {}
+                }
+                pauseLock.notifyAll()
+            }
+        }
+        android.util.Log.d("SaharaDetection", "Detection paused=$paused")
+    }
+
     inner class LocalBinder : Binder() {
         fun getService(): SafetyForegroundService = this@SafetyForegroundService
     }
@@ -114,12 +145,14 @@ class SafetyForegroundService : Service(), SensorEventListener {
         // Launch detection signal collection & fusion processing
         serviceScope.launch {
             screamDetector.detectionFlow.collect { signal ->
+                if (isDetectionPaused) return@collect
                 fusionEngine.onSignalReceived(signal)
                 org.sahara.services.detection.log.DetectionLogManager.logEvent(signal, latestAudioBuffer)
             }
         }
         serviceScope.launch {
             motionDetector.detectionFlow.collect { signal ->
+                if (isDetectionPaused) return@collect
                 fusionEngine.onSignalReceived(signal)
                 org.sahara.services.detection.log.DetectionLogManager.logEvent(signal)
             }
@@ -285,8 +318,12 @@ class SafetyForegroundService : Service(), SensorEventListener {
                     val buffer = ShortArray(1600) // 100ms at 16kHz
                     var chunkIndex = 0
                     while (isRecordingAudio) {
+                        synchronized(pauseLock) {
+                            while (isDetectionPaused && isRecordingAudio) pauseLock.wait()
+                        }
+                        if (!isRecordingAudio) break
                         val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                        if (readSize > 0) {
+                        if (readSize > 0 && !isDetectionPaused) {
                             val chunk = AudioChunk("chunk_${System.currentTimeMillis()}", buffer.clone())
 
                             // Always populate service preRollBuffer and evidenceCaptureEngine preRollBuffer
@@ -408,6 +445,7 @@ class SafetyForegroundService : Service(), SensorEventListener {
     override fun onDestroy() {
         super.onDestroy()
         isRecordingAudio = false
+        synchronized(pauseLock) { pauseLock.notifyAll() }
         try {
             audioRecord?.stop()
             audioRecord?.release()

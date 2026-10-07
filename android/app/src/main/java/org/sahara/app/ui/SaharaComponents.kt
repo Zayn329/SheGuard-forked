@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -597,27 +598,41 @@ fun SaharaHoldToActivateButton(
 @Composable
 fun BreathingSafetyVisual(
     statusText: String = "SheGuard Active",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isActive: Boolean = true
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "breathing")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-    val alphaPulse by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.40f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
+    // The pulse animation only exists while monitoring is active; in standby it is not running at all.
+    val scale: Float
+    val alphaPulse: Float
+    if (isActive) {
+        val infiniteTransition = rememberInfiniteTransition(label = "breathing")
+        scale = infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        ).value
+        alphaPulse = infiniteTransition.animateFloat(
+            initialValue = 0.15f,
+            targetValue = 0.40f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "alpha"
+        ).value
+    } else {
+        scale = 1f
+        alphaPulse = 0.10f
+    }
+    val waveColor = if (isActive) SheGuardColors.PrimaryLight else SheGuardColors.TextSecondary
+    val midColors = if (isActive) listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E8)) else listOf(Color(0xFFF3F4F6), Color(0xFFE5E7EB))
+    val midBorder = if (isActive) Color(0xFFFDA4AF) else Color(0xFFD1D5DB)
+    val coreBorder = if (isActive) SheGuardColors.PrimaryLight else Color(0xFFD1D5DB)
+    val coreShadow = if (isActive) SheGuardColors.Primary else Color.Gray
 
     Box(
         modifier = modifier
@@ -631,7 +646,7 @@ fun BreathingSafetyVisual(
                 .size(165.dp)
                 .scale(scale)
                 .clip(CircleShape)
-                .background(SheGuardColors.PrimaryLight.copy(alpha = alphaPulse))
+                .background(waveColor.copy(alpha = alphaPulse))
         )
 
         // Middle soft blush wave
@@ -640,35 +655,34 @@ fun BreathingSafetyVisual(
                 .size(125.dp)
                 .clip(CircleShape)
                 .background(
-                    Brush.radialGradient(
-                        listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E8))
-                    )
+                    Brush.radialGradient(midColors)
                 )
-                .border(1.dp, Color(0xFFFDA4AF), CircleShape)
+                .border(1.dp, midBorder, CircleShape)
         )
 
         // Core Shield Center (Pure White Card)
         Box(
             modifier = Modifier
                 .size(85.dp)
-                .shadow(8.dp, CircleShape, spotColor = SheGuardColors.Primary)
+                .shadow(if (isActive) 8.dp else 2.dp, CircleShape, spotColor = coreShadow)
                 .clip(CircleShape)
                 .background(SheGuardColors.SurfaceCard)
-                .border(2.dp, SheGuardColors.PrimaryLight, CircleShape),
+                .border(2.dp, coreBorder, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "🛡️",
-                    fontSize = 24.sp
+                    fontSize = 24.sp,
+                    modifier = Modifier.alpha(if (isActive) 1f else 0.4f)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "ACTIVE",
+                    text = if (isActive) "ACTIVE" else "STANDBY",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     fontSize = 9.sp,
-                    color = SheGuardColors.EmeraldSuccess,
+                    color = if (isActive) SheGuardColors.EmeraldSuccess else SheGuardColors.TextSecondary,
                     letterSpacing = 1.sp
                 )
             }

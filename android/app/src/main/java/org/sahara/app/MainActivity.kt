@@ -23,7 +23,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import org.sahara.app.export.EvidenceExporter
@@ -119,6 +122,36 @@ class MainActivity : ComponentActivity() {
     private fun isOnboardingDone() = prefs.getBoolean("has_completed_onboarding", false)
     private fun markOnboardingDone() = prefs.edit().putBoolean("has_completed_onboarding", true).apply()
 
+    // Source of truth for the user's Pause/Resume choice (persisted so it survives Activity recreation)
+    private lateinit var monitoringEnabled: MutableStateFlow<Boolean>
+    private val monitoringMutex = Mutex()
+
+    private fun isIncidentInProgress(): Boolean = when (stateMachine.currentState.value) {
+        IncidentState.SUSPICIOUS_SIGNAL,
+        IncidentState.CANDIDATE_INCIDENT,
+        IncidentState.PENDING_CONFIRMATION,
+        IncidentState.ACTIVE_INCIDENT -> true
+        else -> false
+    }
+
+    private fun setMonitoringEnabled(enabled: Boolean) {
+        // Never pause detection/evidence capture while an incident is being handled.
+        if (isIncidentInProgress()) return
+        if (monitoringEnabled.value == enabled) return
+        monitoringEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_MONITORING_PAUSED, !enabled).apply()
+        foregroundService?.setDetectionPaused(!enabled)
+        lifecycleScope.launch { syncMonitoringState() }
+    }
+
+    // Serialized and idempotent: always converges to the latest requested value, so rapid taps
+    // cannot interleave start/stop calls.
+    private suspend fun syncMonitoringState() {
+        monitoringMutex.withLock {
+            if (monitoringEnabled.value) stateMachine.startMonitoring() else stateMachine.stopMonitoring()
+        }
+    }
+
     private var foregroundService: SafetyForegroundService? = null
     private var isServiceBound = false
 
@@ -141,6 +174,7 @@ class MainActivity : ComponentActivity() {
             foregroundService = binder.getService()
             foregroundService?.stateMachine = stateMachine
             foregroundService?.evidenceCaptureEngine = captureEngine
+            foregroundService?.setDetectionPaused(!monitoringEnabled.value)
             isServiceBound = true
         }
 
@@ -152,6 +186,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        monitoringEnabled = MutableStateFlow(!prefs.getBoolean(KEY_MONITORING_PAUSED, false))
 
         database = SaharaDatabase.getDatabase(applicationContext)
         incidentRepository = IncidentRepositoryImpl(database.incidentDao())
@@ -245,6 +281,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        lifecycleScope.launch { syncMonitoringState() }
+
         // Bind SafetyForegroundService
         val serviceIntent = Intent(this, SafetyForegroundService::class.java)
         startService(serviceIntent)
@@ -267,7 +305,7 @@ class MainActivity : ComponentActivity() {
         var currentScreen by remember {
             mutableStateOf(if (isOnboardingDone()) Screen.HOME else Screen.WELCOME)
         }
-        var isMonitoringActive by remember { mutableStateOf(true) }
+        val isMonitoringActive by monitoringEnabled.collectAsState()
         var activeIncidentState by remember { mutableStateOf(IncidentState.IDLE) }
         var recentExportPackage by remember { mutableStateOf<ExportPackage?>(null) }
         var elapsedIncidentSeconds by remember { mutableStateOf(18) }
@@ -342,18 +380,7 @@ class MainActivity : ComponentActivity() {
                 HomeDashboardScreen(
                     isMonitoringActive = isMonitoringActive,
                     recentIncidentsCount = recordedIncidentsCount,
-                    onToggleMonitoring = { enabled ->
-                        isMonitoringActive = enabled
-                        scope.launch {
-                            if (enabled) {
-                                stateMachine.startMonitoring()
-                                activeIncidentState = IncidentState.MONITORING
-                            } else {
-                                stateMachine.stopMonitoring()
-                                activeIncidentState = IncidentState.IDLE
-                            }
-                        }
-                    },
+                    onToggleMonitoring = { enabled -> setMonitoringEnabled(enabled) },
                     onStartSafetyWatch = {
                         currentScreen = Screen.SAFETY_WATCH
                     },
@@ -603,5 +630,9 @@ class MainActivity : ComponentActivity() {
             .build()
 
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    companion object {
+        private const val KEY_MONITORING_PAUSED = "monitoring_paused"
     }
 }
