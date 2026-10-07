@@ -130,7 +130,7 @@ fun WelcomeScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Anonymous micro-reporting, on-device spatio-temporal risk pattern detection, multi-signal trust verification, and peer mesh early warnings — without cloud dependence.",
+                    text = "Anonymous micro-reporting, on-device spatio-temporal risk pattern detection, multi-signal trust verification, and early warnings shared through nearby devices — without cloud dependence.",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     color = SheGuardColors.TextSecondary,
@@ -203,8 +203,8 @@ fun PermissionsConsentScreen(
             )
             PermissionCard(
                 icon = "📡",
-                title = "Nearby Devices (Mesh)",
-                subtitle = "BLE / Wi-Fi Direct Peer Relay",
+                title = "Nearby Devices",
+                subtitle = "Nearby Device Connection",
                 explanation = "Exchanges anonymized micro-reports and early-warning alerts with nearby devices when cellular data is unavailable."
             )
             PermissionCard(
@@ -612,7 +612,7 @@ fun HomeDashboardScreen(
                                 color = SheGuardColors.TextPrimary
                             )
                             Text(
-                                text = "Report → Detect → Trust → Alert → Mesh",
+                                text = "Report → Detect → Trust → Alert → Nearby Devices",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SheGuardColors.CyanAccent,
                                 fontWeight = FontWeight.SemiBold
@@ -685,8 +685,8 @@ fun HomeDashboardScreen(
                     onClick = onOpenCircle
                 )
                 CompactStatusItem(
-                    title = "Mesh Relay",
-                    status = "BLE / P2P Ready",
+                    title = "Nearby Device Support",
+                    status = "Ready",
                     icon = "📡",
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = onOpenSheGuardReport
@@ -1063,7 +1063,7 @@ fun ActiveIncidentScreen(
                     ActionRowItem(
                         icon = if (smsResults.isNullOrEmpty()) "⟳" else "✓",
                         title = "Dispatching trusted circle alerts",
-                        subtitle = "Attempting Nearby Mesh relay + direct SMS",
+                        subtitle = "Sharing through nearby devices + direct SMS",
                         isDone = !smsResults.isNullOrEmpty()
                     )
 
@@ -1269,7 +1269,7 @@ fun IncidentSealedScreen(
                     SummaryRow("Duration", "3m 42s")
                     SummaryRow("Evidence captured", "AES-256-GCM Encrypted Audio")
                     SummaryRow("Location recorded", "Bandra West / Mumbai Central")
-                    SummaryRow("Circle notified", "2 contacts alerted via Mesh/SMS")
+                    SummaryRow("Circle notified", "2 contacts alerted via nearby devices/SMS")
                 }
             }
         }
@@ -1362,7 +1362,7 @@ fun IncidentTimelineScreen(
                 SaharaTimelineItem(time = "8:41 PM", title = "Distress signals classified", subtitle = "TFLite audio classifier confirmed high confidence")
                 SaharaTimelineItem(time = "8:41 PM", title = "Emergency mode engaged", subtitle = "Autonomous safety state transition")
                 SaharaTimelineItem(time = "8:41 PM", title = "Pre-roll evidence sealed", subtitle = "Rolling buffer encrypted into AES-GCM storage")
-                SaharaTimelineItem(time = "8:42 PM", title = "Notify Circle dispatched", subtitle = "Mesh relay & SMS delivery sent")
+                SaharaTimelineItem(time = "8:42 PM", title = "Notify Circle dispatched", subtitle = "Nearby device sharing & SMS delivery sent")
                 SaharaTimelineItem(time = "8:45 PM", title = "Incident ended by user", subtitle = "Safety confirmed via pass-hold")
                 SaharaTimelineItem(time = "8:45 PM", title = "Record sealed with Merkle Root ✓", subtitle = "SHA-256 tree computed & signed in Keystore", isLast = true, isVerified = true)
             }
@@ -1451,7 +1451,7 @@ fun TrustedContactAlertScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     SummaryRow("Time", "Today at 8:41 PM")
                     SummaryRow("Approximate Location", "Bandra West / Mumbai Central")
-                    SummaryRow("Transport", "Direct SMS + Mesh Relay ✓")
+                    SummaryRow("Transport", "Direct SMS + Nearby Devices ✓")
                 }
             }
         }

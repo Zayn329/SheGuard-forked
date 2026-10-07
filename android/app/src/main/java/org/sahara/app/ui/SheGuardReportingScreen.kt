@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.app.Activity
@@ -51,6 +52,7 @@ import org.sahara.core.domain.models.RisingPatternAlert
 import org.sahara.core.domain.models.SpatioTemporalPattern
 import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.models.TrustLevel
+import org.sahara.core.domain.repository.MAX_SAVED_REPORTS
 import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.core.domain.repository.PatternRepository
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
@@ -222,6 +224,9 @@ fun SheGuardReportingScreen(
     var contextText by remember { mutableStateOf("") }
     var showConfirmation by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
+    var showLimitDialog by remember { mutableStateOf(false) }
+    var reportToRemove by remember { mutableStateOf<MicroReport?>(null) }
+    var removalNotice by remember { mutableStateOf<String?>(null) }
 
     val actualMeshAdapter = meshAdapter ?: remember(alertRepository) {
         SheGuardMeshAdapter(alertRepository = alertRepository)
@@ -262,6 +267,82 @@ fun SheGuardReportingScreen(
     // Combine locally generated active alerts with persisted (and relayed) alerts
     val displayAlerts = remember(activeAlerts, persistedAlerts) {
         (persistedAlerts + activeAlerts).distinctBy { it.alertId }
+    }
+
+    fun reportSummaryLabel(report: MicroReport): String {
+        val time = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(report.timestamp))
+        return "${report.category.name.replace("_", " ")} · $time"
+    }
+
+    // Limit reached: explain and let the user choose which report to remove (never automatic)
+    if (showLimitDialog) {
+        AlertDialog(
+            onDismissRequest = { showLimitDialog = false },
+            title = { Text("Report limit reached", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("You can save up to $MAX_SAVED_REPORTS reports.")
+                    Text("Report limit reached. Remove an existing report to save a new one.")
+                    reportsState.take(MAX_SAVED_REPORTS).forEach { report ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = reportSummaryLabel(report),
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = {
+                                showLimitDialog = false
+                                reportToRemove = report
+                            }) {
+                                Text("Remove Report", color = SheGuardColors.RoseText, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLimitDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Explicit confirmation for removing one specific report
+    reportToRemove?.let { target ->
+        AlertDialog(
+            onDismissRequest = { reportToRemove = null },
+            title = { Text("Remove this report?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("${reportSummaryLabel(target)}\n\nThis report will be permanently removed from this device. Your other reports are not affected.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val toDelete = target
+                    reportToRemove = null
+                    coroutineScope.launch {
+                        repository.deleteReport(toDelete.reportId)
+                        // Keep persisted patterns consistent with the remaining reports
+                        val remaining = repository.getAllReports().first()
+                        patternRepository?.let { repo ->
+                            val candidates = patternEngine.detectCandidatePatterns(remaining)
+                            val evaluated = candidates.map { trustEvaluator.evaluatePattern(it, remaining) }
+                            repo.clearPatterns()
+                            evaluated.forEach { repo.savePattern(it) }
+                        }
+                        removalNotice = "Report removed. You can now save a new report."
+                        delay(3000)
+                        removalNotice = null
+                    }
+                }) {
+                    Text("Remove", color = SheGuardColors.RoseText, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { reportToRemove = null }) { Text("Keep Report") }
+            }
+        )
     }
 
     Column(
@@ -336,7 +417,7 @@ fun SheGuardReportingScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Phase E: Mesh Relay & Offline Status Bar
+            // Phase E: Nearby Device Support & Offline Status Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -360,7 +441,20 @@ fun SheGuardReportingScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isMeshConnected) "Mesh Relay: Connected ($peerCount)" else "Mesh: ${transportStatus?.name ?: "LOCAL_ONLY"}",
+                        text = if (isMeshConnected) {
+                            "Nearby Device Support Active ($peerCount nearby)"
+                        } else {
+                            when (transportStatus) {
+                                org.sahara.services.mesh.transport.MeshTransportStatus.PERMISSION_REQUIRED -> "Nearby Devices: Permission needed"
+                                org.sahara.services.mesh.transport.MeshTransportStatus.UNAVAILABLE,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.ERROR -> "Nearby Devices: Unavailable"
+                                org.sahara.services.mesh.transport.MeshTransportStatus.STARTING,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.ADVERTISING,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.DISCOVERING,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTING -> "Nearby Devices: Searching..."
+                                else -> "Nearby Devices: Not connected (saved on this device)"
+                            }
+                        },
                         color = if (isMeshConnected) SheGuardColors.EmeraldText else SheGuardColors.TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -678,8 +772,15 @@ fun SheGuardReportingScreen(
                     SaharaPrimaryButton(
                         text = if (isSubmitting) "Saving Report..." else "Submit Micro-Report (Offline)",
                         onClick = {
+                            if (isSubmitting) return@SaharaPrimaryButton
+                            isSubmitting = true
                             coroutineScope.launch {
-                                isSubmitting = true
+                                // Enforce the limit against the actual persisted reports before building/saving
+                                if (repository.getReportCount() >= MAX_SAVED_REPORTS) {
+                                    isSubmitting = false
+                                    showLimitDialog = true
+                                    return@launch
+                                }
                                 val loc = (locationState as? LocationState.Success)?.location
                                 val reportLat = loc?.latitude
                                 val reportLng = loc?.longitude
@@ -696,7 +797,13 @@ fun SheGuardReportingScreen(
                                     syncStatus = SyncStatus.LOCAL,
                                     accuracy = reportAcc
                                 )
-                                repository.saveReport(report)
+                                val wasSaved = repository.saveReport(report)
+                                if (!wasSaved) {
+                                    // Persistence layer blocked it (limit reached); nothing was deleted or overwritten
+                                    isSubmitting = false
+                                    showLimitDialog = true
+                                    return@launch
+                                }
 
                                 // Re-run pattern engine and trust evaluation, then persist evaluated patterns
                                 val updatedReports = reportsState + report
@@ -805,7 +912,7 @@ fun SheGuardReportingScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                val sourceText = if (alert.isRelayed) "📡 Relayed via nearby device (Mesh)" else "🏠 Locally evaluated"
+                                val sourceText = if (alert.isRelayed) "📡 Received from a nearby device" else "🏠 Locally evaluated"
                                 Text(
                                     text = sourceText,
                                     color = if (alert.isRelayed) SheGuardColors.CyanAccent else SheGuardColors.EmeraldText,
@@ -932,7 +1039,7 @@ fun SheGuardReportingScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Local Room Reports (${reportsState.size})",
+                            text = "Saved Reports (${reportsState.size}/$MAX_SAVED_REPORTS)",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = SheGuardColors.TextPrimary
@@ -947,6 +1054,19 @@ fun SheGuardReportingScreen(
                         )
                     }
 
+                    removalNotice?.let { notice ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = notice, color = SheGuardColors.EmeraldText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (reportsState.size >= MAX_SAVED_REPORTS) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "You can save up to $MAX_SAVED_REPORTS reports. Remove an existing report to save a new one.",
+                            color = SheGuardColors.AmberText,
+                            fontSize = 12.sp
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     if (reportsState.isEmpty()) {
@@ -958,7 +1078,7 @@ fun SheGuardReportingScreen(
                         )
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            reportsState.take(8).forEach { report ->
+                            reportsState.take(MAX_SAVED_REPORTS).forEach { report ->
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1019,6 +1139,15 @@ fun SheGuardReportingScreen(
                                             color = SheGuardColors.TextSecondary,
                                             fontSize = 10.sp,
                                             modifier = Modifier.padding(top = 3.dp)
+                                        )
+                                        Text(
+                                            text = "Remove Report",
+                                            color = SheGuardColors.RoseText,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .padding(top = 6.dp)
+                                                .clickable { reportToRemove = report }
                                         )
                                     }
                                 }

@@ -27,6 +27,10 @@ class SheGuardDataUnitTest {
         override suspend fun insertReport(report: org.sahara.core.data.db.MicroReportEntity) {
             reports[report.reportId] = report
         }
+
+        override suspend fun deleteReportById(id: String) {
+            reports.remove(id)
+        }
     }
 
     private class FakePatternDao : org.sahara.core.data.db.SpatioTemporalPatternDao {

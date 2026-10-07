@@ -16,6 +16,9 @@ interface MicroReportDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReport(report: MicroReportEntity)
+
+    @Query("DELETE FROM micro_reports WHERE reportId = :id")
+    suspend fun deleteReportById(id: String)
 }
 
 @Dao

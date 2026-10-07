@@ -249,7 +249,7 @@ class MainActivity : ComponentActivity() {
                     is org.sahara.services.mesh.relay.SheGuardMeshProcessResult.DistressRelayed -> {
                         showIncomingMeshNotification(
                             title = "🚨 EMERGENCY: Nearby Distress Signal",
-                            content = "Received emergency distress alert via BLE mesh.",
+                            content = "Received an emergency distress alert from a nearby device.",
                             screen = Screen.TRUSTED_ALERT
                         )
                     }
@@ -692,10 +692,10 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = android.app.NotificationChannel(
                 channelId,
-                "Sahara Mesh Early Warning Alerts",
+                "Nearby Device Early Warning Alerts",
                 android.app.NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications for incoming BLE/P2P mesh safety and distress alerts"
+                description = "Notifications for safety and distress alerts received from nearby devices"
             }
             notificationManager.createNotificationChannel(channel)
         }

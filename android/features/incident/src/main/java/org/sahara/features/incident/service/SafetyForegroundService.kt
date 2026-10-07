@@ -223,7 +223,12 @@ class SafetyForegroundService : Service(), SensorEventListener {
                     syncStatus = SyncStatus.LOCAL
                 )
 
-                microReportRepo.saveReport(microReport)
+                val saved = microReportRepo.saveReport(microReport)
+                if (!saved) {
+                    // Saved-report limit reached: never delete existing reports automatically.
+                    android.util.Log.w("Sahara", "Automated sensor report not saved: saved report limit reached")
+                    return@launch
+                }
 
                 val allReports = microReportRepo.getAllReports().first()
                 val candidates = patternEngine.detectCandidatePatterns(allReports)
