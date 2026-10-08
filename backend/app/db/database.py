@@ -10,6 +10,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sahara.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+for prefix in ("postgresql+psycopg2://", "postgresql+psycopg://"):
+    if DATABASE_URL.startswith(prefix):
+        DATABASE_URL = "postgresql://" + DATABASE_URL[len(prefix):]
+
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
 engine_kwargs = {"connect_args": connect_args}
