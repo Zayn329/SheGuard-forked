@@ -14,7 +14,9 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -39,6 +41,14 @@ data class SheGuardLocation(
         }
     }
 }
+
+/** Raw GPS fix for emergency SMS: works fully offline (no address lookup needed). */
+data class EmergencyFix(
+    val latitude: Double,
+    val longitude: Double,
+    val ageSeconds: Long,
+    val accuracyMeters: Float?
+)
 
 sealed class LocationState {
     object Idle : LocationState()
@@ -100,9 +110,12 @@ class DeviceLocationManager(
             Priority.PRIORITY_BALANCED_POWER_ACCURACY
         }
 
-        val rawLocation = withTimeoutOrNull(timeoutMillis) {
-            fetchFusedLocation(priority) ?: fetchLastLocation() ?: fetchSystemLocationManagerFallback()
-        }
+        // Each stage has its own budget. Previously one timeout wrapped everything, so a slow GPS cold
+        // start (typical with internet off) cancelled the "last known location" fallbacks before they ran.
+        val rawLocation = withTimeoutOrNull(timeoutMillis) { fetchFusedLocation(priority) }
+            ?: (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) withTimeoutOrNull(3000L) { fetchGpsProviderLocation() } else null)
+            ?: withTimeoutOrNull(2000L) { fetchLastLocation() }
+            ?: fetchSystemLocationManagerFallback()
 
         if (rawLocation == null) {
             return LocationState.Error(
@@ -121,6 +134,56 @@ class DeviceLocationManager(
         )
 
         return LocationState.Success(sheGuardLocation)
+    }
+
+    /**
+     * Fast, offline-safe location for emergency alerts. Tries a fresh fix (GPS works without internet),
+     * then falls back to the last known location, and never reverse-geocodes (that needs internet).
+     */
+    suspend fun getEmergencyFix(freshTimeoutMillis: Long = 4000L): EmergencyFix? {
+        if (!hasAnyLocationPermission()) return null
+        val priority = if (hasFineLocationPermission()) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+
+        val raw: Location = (if (isLocationServicesEnabled()) {
+            withTimeoutOrNull(freshTimeoutMillis) { fetchFusedLocation(priority) }
+                ?: (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) withTimeoutOrNull(2000L) { fetchGpsProviderLocation() } else null)
+        } else null)
+            ?: withTimeoutOrNull(2000L) { fetchLastLocation() }
+            ?: fetchSystemLocationManagerFallback()
+            ?: return null
+
+        val ageSeconds = if (raw.time > 0L) ((System.currentTimeMillis() - raw.time) / 1000L).coerceAtLeast(0L) else 0L
+        return EmergencyFix(
+            latitude = raw.latitude,
+            longitude = raw.longitude,
+            ageSeconds = ageSeconds,
+            accuracyMeters = if (raw.hasAccuracy()) raw.accuracy else null
+        )
+    }
+
+    /** Direct GPS-chip fix (API 30+). Works without internet and without Google Play services. */
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private suspend fun fetchGpsProviderLocation(): Location? = suspendCancellableCoroutine { continuation ->
+        try {
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || lm == null ||
+                !hasFineLocationPermission() || !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            ) {
+                continuation.resume(null)
+                return@suspendCancellableCoroutine
+            }
+            val signal = android.os.CancellationSignal()
+            continuation.invokeOnCancellation { signal.cancel() }
+            lm.getCurrentLocation(
+                LocationManager.GPS_PROVIDER,
+                signal,
+                ContextCompat.getMainExecutor(context)
+            ) { location: Location? ->
+                if (continuation.isActive) continuation.resume(location)
+            }
+        } catch (e: Exception) {
+            if (continuation.isActive) continuation.resume(null)
+        }
     }
 
     private suspend fun fetchFusedLocation(priority: Int): Location? = suspendCancellableCoroutine { continuation ->
@@ -188,38 +251,34 @@ class DeviceLocationManager(
         }
     }
 
-    suspend fun resolveAddress(latitude: Double, longitude: Double): String = withContext(Dispatchers.IO) {
+    suspend fun resolveAddress(latitude: Double, longitude: Double): String {
         val fallbackCoordinates = String.format(Locale.US, "%.4f° N, %.4f° E", latitude, longitude)
-        if (!Geocoder.isPresent()) {
-            return@withContext fallbackCoordinates
-        }
+        if (!Geocoder.isPresent()) return fallbackCoordinates
 
-        try {
-            val geocoder = Geocoder(context, Locale.getDefault())
-            @Suppress("DEPRECATION")
-            val addresses: List<Address>? = geocoder.getFromLocation(latitude, longitude, 1)
-            val address = addresses?.firstOrNull() ?: return@withContext fallbackCoordinates
+        // Geocoder is a blocking network call that can hang for a long time with no internet.
+        // Run it unstructured and give up after 3s so callers are never stuck.
+        val lookup = CoroutineScope(Dispatchers.IO).async {
+            try {
+                val geocoder = Geocoder(context, Locale.getDefault())
+                @Suppress("DEPRECATION")
+                val addresses: List<Address>? = geocoder.getFromLocation(latitude, longitude, 1)
+                val address = addresses?.firstOrNull() ?: return@async null
 
-            // Format address hierarchically
-            val thoroughfare = address.thoroughfare // Street name
-            val subLocality = address.subLocality   // Area / Neighborhood
-            val locality = address.locality         // City
-            val subAdmin = address.subAdminArea     // District / Sub-region
+                val parts = mutableListOf<String>()
+                val thoroughfare = address.thoroughfare
+                val subLocality = address.subLocality
+                val locality = address.locality
+                val subAdmin = address.subAdminArea
+                if (!thoroughfare.isNullOrBlank()) parts.add(thoroughfare)
+                if (!subLocality.isNullOrBlank() && subLocality != thoroughfare) parts.add(subLocality)
+                if (!locality.isNullOrBlank()) parts.add(locality)
+                else if (!subAdmin.isNullOrBlank()) parts.add(subAdmin)
 
-            val parts = mutableListOf<String>()
-            if (!thoroughfare.isNullOrBlank()) parts.add(thoroughfare)
-            if (!subLocality.isNullOrBlank() && subLocality != thoroughfare) parts.add(subLocality)
-            if (!locality.isNullOrBlank()) parts.add(locality)
-            else if (!subAdmin.isNullOrBlank()) parts.add(subAdmin)
-
-            if (parts.isNotEmpty()) {
-                parts.joinToString(", ")
-            } else {
-                address.getAddressLine(0) ?: fallbackCoordinates
+                if (parts.isNotEmpty()) parts.joinToString(", ") else address.getAddressLine(0)
+            } catch (e: Exception) {
+                null
             }
-        } catch (e: Exception) {
-            // Reverse geocoding fails gracefully when offline or network unavailable
-            fallbackCoordinates
         }
+        return withTimeoutOrNull(3000L) { lookup.await() } ?: fallbackCoordinates
     }
 }

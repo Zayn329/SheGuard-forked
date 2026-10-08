@@ -84,6 +84,37 @@ class SafetyForegroundService : Service(), SensorEventListener {
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + Job())
 
+    private val pauseLock = Object()
+    @Volatile var isDetectionPaused = false
+        private set
+
+    /**
+     * Pauses/resumes on-device detection. While paused the microphone and accelerometer are
+     * released and detector signals are ignored. The single audio thread and the single timeout
+     * loop are never recreated, so repeated calls cannot create duplicate jobs.
+     */
+    fun setDetectionPaused(paused: Boolean) {
+        synchronized(pauseLock) {
+            if (isDetectionPaused == paused) return
+            isDetectionPaused = paused
+            if (paused) {
+                sensorManager?.unregisterListener(this)
+                if (isRecordingAudio) {
+                    try { audioRecord?.stop() } catch (_: Throwable) {}
+                }
+            } else {
+                accelerometer?.let {
+                    sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+                }
+                if (isRecordingAudio) {
+                    try { audioRecord?.startRecording() } catch (_: Throwable) {}
+                }
+                pauseLock.notifyAll()
+            }
+        }
+        android.util.Log.d("SaharaDetection", "Detection paused=$paused")
+    }
+
     inner class LocalBinder : Binder() {
         fun getService(): SafetyForegroundService = this@SafetyForegroundService
     }
@@ -114,12 +145,14 @@ class SafetyForegroundService : Service(), SensorEventListener {
         // Launch detection signal collection & fusion processing
         serviceScope.launch {
             screamDetector.detectionFlow.collect { signal ->
+                if (isDetectionPaused) return@collect
                 fusionEngine.onSignalReceived(signal)
                 org.sahara.services.detection.log.DetectionLogManager.logEvent(signal, latestAudioBuffer)
             }
         }
         serviceScope.launch {
             motionDetector.detectionFlow.collect { signal ->
+                if (isDetectionPaused) return@collect
                 fusionEngine.onSignalReceived(signal)
                 org.sahara.services.detection.log.DetectionLogManager.logEvent(signal)
             }
@@ -190,7 +223,12 @@ class SafetyForegroundService : Service(), SensorEventListener {
                     syncStatus = SyncStatus.LOCAL
                 )
 
-                microReportRepo.saveReport(microReport)
+                val saved = microReportRepo.saveReport(microReport)
+                if (!saved) {
+                    // Saved-report limit reached: never delete existing reports automatically.
+                    android.util.Log.w("Sahara", "Automated sensor report not saved: saved report limit reached")
+                    return@launch
+                }
 
                 val allReports = microReportRepo.getAllReports().first()
                 val candidates = patternEngine.detectCandidatePatterns(allReports)
@@ -209,11 +247,10 @@ class SafetyForegroundService : Service(), SensorEventListener {
             val contactRepo = ContactRepositoryImpl(db.notifyContactDao())
             val auditRepo = AuditRepositoryImpl(db.auditEventDao())
             val meshRelay = sheGuardMeshAdapter?.meshRelay ?: NearbyConnectionsMeshRelay()
-            val smsProvider = EscalationFallbackManager.createSmsProvider(isDebug = true)
             val fallbackManager = EscalationFallbackManager(
                 meshRelay = meshRelay,
-                smsProvider = smsProvider,
-                isDebug = true,
+                smsProvider = org.sahara.services.mesh.fallback.SystemSmsProvider(applicationContext),
+                isDebug = false,
                 meshAdapter = sheGuardMeshAdapter
             )
             notifyCircleManager = NotifyCircleManager(contactRepo, auditRepo, fallbackManager)
@@ -242,11 +279,14 @@ class SafetyForegroundService : Service(), SensorEventListener {
                 try {
                     val refCode = "SAHARA-${incident.incidentId.toString().take(6).uppercase()}"
                     val manager = getOrCreateNotifyCircleManager()
+                    val lastKnown = lastKnownLocationOrNull()
                     serviceScope.launch {
                         manager.dispatchAlert(
                             incidentId = incident.incidentId,
-                            locationText = "Background Distress Location",
-                            locationAgeSeconds = 0,
+                            locationText = lastKnown?.let { String.format(java.util.Locale.US, "%.5f, %.5f", it.latitude, it.longitude) },
+                            locationAgeSeconds = lastKnown?.let { ((System.currentTimeMillis() - it.time) / 1000L).coerceAtLeast(0L) },
+                            latitude = lastKnown?.latitude,
+                            longitude = lastKnown?.longitude,
                             evidenceHash = incident.finalMerkleRoot ?: "ACTIVE_${incident.incidentId.toString().take(8)}",
                             referenceCode = refCode
                         )
@@ -257,6 +297,20 @@ class SafetyForegroundService : Service(), SensorEventListener {
             }
         }
         return sm
+    }
+
+    /** Best last-known location from the device's own providers (works offline). Null if none/no permission. */
+    private fun lastKnownLocationOrNull(): android.location.Location? {
+        return try {
+            val hasPermission =
+                androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                        androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!hasPermission) return null
+            val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return null
+            lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }
+        } catch (e: Throwable) {
+            null
+        }
     }
 
     private fun startAudioRecording() {
@@ -285,8 +339,12 @@ class SafetyForegroundService : Service(), SensorEventListener {
                     val buffer = ShortArray(1600) // 100ms at 16kHz
                     var chunkIndex = 0
                     while (isRecordingAudio) {
+                        synchronized(pauseLock) {
+                            while (isDetectionPaused && isRecordingAudio) pauseLock.wait()
+                        }
+                        if (!isRecordingAudio) break
                         val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                        if (readSize > 0) {
+                        if (readSize > 0 && !isDetectionPaused) {
                             val chunk = AudioChunk("chunk_${System.currentTimeMillis()}", buffer.clone())
 
                             // Always populate service preRollBuffer and evidenceCaptureEngine preRollBuffer
@@ -408,6 +466,7 @@ class SafetyForegroundService : Service(), SensorEventListener {
     override fun onDestroy() {
         super.onDestroy()
         isRecordingAudio = false
+        synchronized(pauseLock) { pauseLock.notifyAll() }
         try {
             audioRecord?.stop()
             audioRecord?.release()

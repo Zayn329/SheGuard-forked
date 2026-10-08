@@ -12,10 +12,20 @@ import org.sahara.core.domain.models.RisingPatternAlert
 import org.sahara.core.domain.models.SpatioTemporalPattern
 import java.util.UUID
 
+/** Maximum number of micro-reports that may be saved on the device at one time. */
+const val MAX_SAVED_REPORTS = 3
+
 interface MicroReportRepository {
-    suspend fun saveReport(report: MicroReport)
+    /**
+     * Saves the report only if the persisted report count is below [MAX_SAVED_REPORTS]
+     * (or the report already exists and is simply being updated).
+     * Returns true if saved, false if the limit was reached. Never deletes existing reports.
+     */
+    suspend fun saveReport(report: MicroReport): Boolean
     fun getAllReports(): Flow<List<MicroReport>>
     suspend fun getReportById(id: UUID): MicroReport?
+    suspend fun getReportCount(): Int
+    suspend fun deleteReport(id: UUID)
 }
 
 interface PatternRepository {

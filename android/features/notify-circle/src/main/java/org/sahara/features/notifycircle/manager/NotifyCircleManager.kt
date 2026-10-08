@@ -71,7 +71,9 @@ class NotifyCircleManager(
         locationText: String? = null,
         locationAgeSeconds: Long? = null,
         evidenceHash: String,
-        referenceCode: String
+        referenceCode: String,
+        latitude: Double? = null,
+        longitude: Double? = null
     ): List<ContactDeliveryRecord> {
         val contacts = contactRepository.getContacts().first()
         if (contacts.isEmpty()) {
@@ -102,7 +104,9 @@ class NotifyCircleManager(
                 locationText = sanitizedLocation,
                 locationAgeSeconds = sanitizedAge,
                 evidenceIntegrityHash = evidenceHash,
-                referenceCode = referenceCode
+                referenceCode = referenceCode,
+                latitude = if (contact.locationPermission) latitude else null,
+                longitude = if (contact.locationPermission) longitude else null
             )
 
             val meshPacket = org.sahara.services.mesh.models.MeshPacket(

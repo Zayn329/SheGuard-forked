@@ -25,10 +25,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import org.sahara.app.location.DeviceLocationManager
 import org.sahara.app.location.LocationState
@@ -43,12 +52,20 @@ import org.sahara.core.domain.models.RisingPatternAlert
 import org.sahara.core.domain.models.SpatioTemporalPattern
 import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.models.TrustLevel
+import org.sahara.core.domain.repository.MAX_SAVED_REPORTS
 import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.core.domain.repository.PatternRepository
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
+
+/** Safely unwraps a Context (possibly wrapped by Compose/Hilt/etc.) to its Activity. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,30 +83,46 @@ fun SheGuardReportingScreen(
     val locationManager = remember { DeviceLocationManager(context) }
     var locationState by remember { mutableStateOf<LocationState>(LocationState.Idle) }
 
+    val activity = remember(context) { context.findActivity() }
+    val locationPermissions = arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+
+    fun shouldShowRationale(): Boolean {
+        val act = activity ?: return false
+        return locationPermissions.any {
+            ActivityCompat.shouldShowRequestPermissionRationale(act, it)
+        }
+    }
+
+    val permanentDenialError = LocationState.Error(
+        message = "Location permission permanently denied. Enable it in App Settings to use location features.",
+        isGpsDisabled = false
+    )
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (fineGranted || coarseGranted) {
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
             coroutineScope.launch {
                 locationState = LocationState.Fetching
                 locationState = locationManager.getCurrentDeviceLocation()
             }
         } else {
-            locationState = LocationState.PermissionRequired
+            // A request just happened, so rationale == false means permanent denial
+            locationState = if (shouldShowRationale()) LocationState.PermissionRequired
+            else permanentDenialError
         }
     }
 
     fun refreshDeviceLocation() {
         coroutineScope.launch {
             if (!locationManager.hasAnyLocationPermission()) {
-                locationPermissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
-                )
+                locationState = LocationState.PermissionRequired
+                locationPermissionLauncher.launch(locationPermissions)
             } else {
                 locationState = LocationState.Fetching
                 locationState = locationManager.getCurrentDeviceLocation()
@@ -97,17 +130,93 @@ fun SheGuardReportingScreen(
         }
     }
 
+    // Initialize location state
+    var permissionRequested by remember { mutableStateOf(false) }
+    var settingsRequested by remember { mutableStateOf(false) }
+
+    // Launcher for Android Settings
+    val settingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        // When returning from Settings, re-check location state
+        settingsRequested = false
+        if (locationManager.hasAnyLocationPermission() && locationManager.isLocationServicesEnabled()) {
+            coroutineScope.launch {
+                locationState = LocationState.Fetching
+                locationState = locationManager.getCurrentDeviceLocation()
+            }
+        } else if (locationManager.hasAnyLocationPermission()) {
+            locationState = LocationState.Error(
+                message = "Location Services are disabled. Enable GPS or network location in Settings to use this feature.",
+                isGpsDisabled = true
+            )
+        }
+    }
+
+    // Helper function to get appropriate action text based on location state
+    fun getLocationActionText(): String {
+        return when (locationState) {
+            is LocationState.Error -> {
+                if ((locationState as LocationState.Error).isGpsDisabled) {
+                    "Turn On Location"
+                } else if (!locationManager.hasAnyLocationPermission()) {
+                    "Open Settings"
+                } else {
+                    "Retry GPS"
+                }
+            }
+            is LocationState.PermissionRequired -> "Retry GPS"
+            else -> "🔄 Refresh"
+        }
+    }
+
+    // Helper function to handle location action based on state
+    fun handleLocationAction() {
+        when (locationState) {
+            is LocationState.Error -> {
+                if ((locationState as LocationState.Error).isGpsDisabled) {
+                    // Location services disabled - open Android Settings
+                    settingsRequested = true
+                    settingsLauncher.launch(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                } else if (!locationManager.hasAnyLocationPermission()) {
+                    // Permission permanently denied - open this app's settings page
+                    settingsRequested = true
+                    settingsLauncher.launch(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(Uri.fromParts("package", context.packageName, null))
+                    )
+                } else {
+                    // Other error - refresh location
+                    refreshDeviceLocation()
+                }
+            }
+            is LocationState.PermissionRequired -> {
+                // Permission needed - request permissions
+                permissionRequested = true
+                locationPermissionLauncher.launch(locationPermissions)
+            }
+            else -> {
+                // Default case - refresh location
+                refreshDeviceLocation()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
-        if (locationManager.hasAnyLocationPermission()) {
+        if (!locationManager.hasAnyLocationPermission()) {
+            permissionRequested = true
+            locationState = LocationState.PermissionRequired
+            locationPermissionLauncher.launch(locationPermissions)
+        } else if (!locationManager.isLocationServicesEnabled()) {
+            // Permission granted but location services disabled
+            locationState = LocationState.Error(
+                message = "Location Services are disabled. Enable GPS or network location in Settings to use this feature.",
+                isGpsDisabled = true
+            )
+        } else {
+            // Permission already granted and location services enabled, get location
             locationState = LocationState.Fetching
             locationState = locationManager.getCurrentDeviceLocation()
-        } else {
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
         }
     }
 
@@ -115,6 +224,9 @@ fun SheGuardReportingScreen(
     var contextText by remember { mutableStateOf("") }
     var showConfirmation by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
+    var showLimitDialog by remember { mutableStateOf(false) }
+    var reportToRemove by remember { mutableStateOf<MicroReport?>(null) }
+    var removalNotice by remember { mutableStateOf<String?>(null) }
 
     val actualMeshAdapter = meshAdapter ?: remember(alertRepository) {
         SheGuardMeshAdapter(alertRepository = alertRepository)
@@ -126,8 +238,10 @@ fun SheGuardReportingScreen(
     val isMeshConnected = transportStatus == org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTED
 
     val reportsState by repository.getAllReports().collectAsState(initial = emptyList())
-    val persistedAlerts by (alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList())
-        ?: remember { mutableStateOf(emptyList()) })
+    val persistedAlerts: List<RisingPatternAlert> by (
+            alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList<RisingPatternAlert>())
+                ?: remember { mutableStateOf(emptyList<RisingPatternAlert>()) }
+            )
 
     val patternEngine = remember { SpatioTemporalPatternEngine() }
     val trustEvaluator = remember { TrustAndAntiGamingEvaluator() }
@@ -155,6 +269,82 @@ fun SheGuardReportingScreen(
         (persistedAlerts + activeAlerts).distinctBy { it.alertId }
     }
 
+    fun reportSummaryLabel(report: MicroReport): String {
+        val time = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(report.timestamp))
+        return "${report.category.name.replace("_", " ")} · $time"
+    }
+
+    // Limit reached: explain and let the user choose which report to remove (never automatic)
+    if (showLimitDialog) {
+        AlertDialog(
+            onDismissRequest = { showLimitDialog = false },
+            title = { Text("Report limit reached", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("You can save up to $MAX_SAVED_REPORTS reports.")
+                    Text("Report limit reached. Remove an existing report to save a new one.")
+                    reportsState.take(MAX_SAVED_REPORTS).forEach { report ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = reportSummaryLabel(report),
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = {
+                                showLimitDialog = false
+                                reportToRemove = report
+                            }) {
+                                Text("Remove Report", color = SheGuardColors.RoseText, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLimitDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Explicit confirmation for removing one specific report
+    reportToRemove?.let { target ->
+        AlertDialog(
+            onDismissRequest = { reportToRemove = null },
+            title = { Text("Remove this report?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("${reportSummaryLabel(target)}\n\nThis report will be permanently removed from this device. Your other reports are not affected.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val toDelete = target
+                    reportToRemove = null
+                    coroutineScope.launch {
+                        repository.deleteReport(toDelete.reportId)
+                        // Keep persisted patterns consistent with the remaining reports
+                        val remaining = repository.getAllReports().first()
+                        patternRepository?.let { repo ->
+                            val candidates = patternEngine.detectCandidatePatterns(remaining)
+                            val evaluated = candidates.map { trustEvaluator.evaluatePattern(it, remaining) }
+                            repo.clearPatterns()
+                            evaluated.forEach { repo.savePattern(it) }
+                        }
+                        removalNotice = "Report removed. You can now save a new report."
+                        delay(3000)
+                        removalNotice = null
+                    }
+                }) {
+                    Text("Remove", color = SheGuardColors.RoseText, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { reportToRemove = null }) { Text("Keep Report") }
+            }
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -164,17 +354,19 @@ fun SheGuardReportingScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SheGuardColors.SurfaceCard)
-                .border(width = 1.dp, color = SheGuardColors.BorderSubtle, shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
                 .shadow(4.dp, RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp), spotColor = SheGuardColors.Primary.copy(alpha = 0.1f))
+                .background(SheGuardColors.SurfaceCard, RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                .border(width = 1.dp, color = SheGuardColors.BorderSubtle, shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -186,7 +378,7 @@ fun SheGuardReportingScreen(
                         Text(text = "🛡️", fontSize = 20.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "SheGuard Micro-Report",
                             style = MaterialTheme.typography.titleLarge.copy(
@@ -204,13 +396,14 @@ fun SheGuardReportingScreen(
                     }
                 }
                 if (onBack != null) {
+                    Spacer(modifier = Modifier.width(10.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(SheGuardColors.PrimaryContainer)
                             .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(12.dp))
                             .clickable { onBack() }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
                             text = "✕ Close",
@@ -224,7 +417,7 @@ fun SheGuardReportingScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Phase E: Mesh Relay & Offline Status Bar
+            // Phase E: Nearby Device Support & Offline Status Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -248,7 +441,20 @@ fun SheGuardReportingScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isMeshConnected) "Mesh Relay: Connected ($peerCount)" else "Mesh: ${transportStatus?.name ?: "LOCAL_ONLY"}",
+                        text = if (isMeshConnected) {
+                            "Nearby Device Support Active ($peerCount nearby)"
+                        } else {
+                            when (transportStatus) {
+                                org.sahara.services.mesh.transport.MeshTransportStatus.PERMISSION_REQUIRED -> "Nearby Devices: Permission needed"
+                                org.sahara.services.mesh.transport.MeshTransportStatus.UNAVAILABLE,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.ERROR -> "Nearby Devices: Unavailable"
+                                org.sahara.services.mesh.transport.MeshTransportStatus.STARTING,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.ADVERTISING,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.DISCOVERING,
+                                org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTING -> "Nearby Devices: Searching..."
+                                else -> "Nearby Devices: Not connected (saved on this device)"
+                            }
+                        },
                         color = if (isMeshConnected) SheGuardColors.EmeraldText else SheGuardColors.TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -285,7 +491,7 @@ fun SheGuardReportingScreen(
                     ) {
                         Text(text = "✓", color = SheGuardColors.EmeraldSuccess, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Micro-Report Saved Locally!",
                                 color = SheGuardColors.EmeraldText,
@@ -314,7 +520,6 @@ fun SheGuardReportingScreen(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -322,7 +527,10 @@ fun SheGuardReportingScreen(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = SheGuardColors.TextPrimary
-                            )
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
                         Box(
                             modifier = Modifier
@@ -355,7 +563,9 @@ fun SheGuardReportingScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (i in categories.indices step 2) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 val cat1 = categories[i]
@@ -365,7 +575,7 @@ fun SheGuardReportingScreen(
                                     category = cat1,
                                     isSelected = selectedCategory == cat1,
                                     onClick = { selectedCategory = cat1 },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
                                 )
 
                                 if (cat2 != null) {
@@ -373,7 +583,7 @@ fun SheGuardReportingScreen(
                                         category = cat2,
                                         isSelected = selectedCategory == cat2,
                                         onClick = { selectedCategory = cat2 },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f).fillMaxHeight()
                                     )
                                 } else {
                                     Spacer(modifier = Modifier.weight(1f))
@@ -381,8 +591,6 @@ fun SheGuardReportingScreen(
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -403,11 +611,13 @@ fun SheGuardReportingScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
                                 ) {
                                     Text(text = "📍", fontSize = 16.sp)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "Device Location Context",
                                             style = MaterialTheme.typography.labelSmall.copy(
@@ -447,7 +657,7 @@ fun SheGuardReportingScreen(
                                             }
                                             is LocationState.Error -> {
                                                 Text(
-                                                    text = "Location Unavailable",
+                                                    text = state.message,
                                                     style = MaterialTheme.typography.bodySmall.copy(
                                                         color = SheGuardColors.RoseText,
                                                         fontWeight = FontWeight.Bold
@@ -475,17 +685,17 @@ fun SheGuardReportingScreen(
                                     }
                                 }
 
-                                // Action / Refresh / Retry button
+                                // Action button - changes based on location state
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(SheGuardColors.PrimaryContainer)
                                         .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(8.dp))
-                                        .clickable { refreshDeviceLocation() }
+                                        .clickable { handleLocationAction() }
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = if (locationState is LocationState.Error || locationState is LocationState.PermissionRequired) "Retry GPS" else "🔄 Refresh",
+                                        text = getLocationActionText(),
                                         color = SheGuardColors.Primary,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
@@ -499,12 +709,14 @@ fun SheGuardReportingScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        verticalAlignment = Alignment.Top
                                     ) {
                                         Text(
                                             text = String.format(Locale.US, "Coords: %.4f° N, %.4f° E", state.location.latitude, state.location.longitude),
-                                            style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.TextMuted, fontSize = 10.sp)
+                                            style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.TextMuted, fontSize = 10.sp),
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = state.location.getAccuracyDescription(),
                                             style = MaterialTheme.typography.labelSmall.copy(
@@ -560,8 +772,15 @@ fun SheGuardReportingScreen(
                     SaharaPrimaryButton(
                         text = if (isSubmitting) "Saving Report..." else "Submit Micro-Report (Offline)",
                         onClick = {
+                            if (isSubmitting) return@SaharaPrimaryButton
+                            isSubmitting = true
                             coroutineScope.launch {
-                                isSubmitting = true
+                                // Enforce the limit against the actual persisted reports before building/saving
+                                if (repository.getReportCount() >= MAX_SAVED_REPORTS) {
+                                    isSubmitting = false
+                                    showLimitDialog = true
+                                    return@launch
+                                }
                                 val loc = (locationState as? LocationState.Success)?.location
                                 val reportLat = loc?.latitude
                                 val reportLng = loc?.longitude
@@ -578,7 +797,13 @@ fun SheGuardReportingScreen(
                                     syncStatus = SyncStatus.LOCAL,
                                     accuracy = reportAcc
                                 )
-                                repository.saveReport(report)
+                                val wasSaved = repository.saveReport(report)
+                                if (!wasSaved) {
+                                    // Persistence layer blocked it (limit reached); nothing was deleted or overwritten
+                                    isSubmitting = false
+                                    showLimitDialog = true
+                                    return@launch
+                                }
 
                                 // Re-run pattern engine and trust evaluation, then persist evaluated patterns
                                 val updatedReports = reportsState + report
@@ -652,19 +877,23 @@ fun SheGuardReportingScreen(
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
                                         Text(text = "🚨", fontSize = 18.sp)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "ALERT: ${alertEngine.categoryDisplayName(alert.category)}",
                                             color = trustTextColor,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
+                                            fontSize = 15.sp,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
@@ -683,7 +912,7 @@ fun SheGuardReportingScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                val sourceText = if (alert.isRelayed) "📡 Relayed via nearby device (Mesh)" else "🏠 Locally evaluated"
+                                val sourceText = if (alert.isRelayed) "📡 Received from a nearby device" else "🏠 Locally evaluated"
                                 Text(
                                     text = sourceText,
                                     color = if (alert.isRelayed) SheGuardColors.CyanAccent else SheGuardColors.EmeraldText,
@@ -737,7 +966,8 @@ fun SheGuardReportingScreen(
                                 text = "Phase C · Multi-Signal Verified Emerging Patterns (${emergingPatterns.size})",
                                 color = SheGuardColors.EmeraldText,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -771,7 +1001,8 @@ fun SheGuardReportingScreen(
                                 text = "Phase B · Detected Candidate Patterns (${candidatePatterns.size})",
                                 color = SheGuardColors.AmberText,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -805,19 +1036,34 @@ fun SheGuardReportingScreen(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Local Room Reports (${reportsState.size})",
+                            text = "Saved Reports (${reportsState.size}/$MAX_SAVED_REPORTS)",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = SheGuardColors.TextPrimary
-                            )
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
                         Text(
                             text = "Room Storage (Local)",
                             style = MaterialTheme.typography.labelSmall.copy(color = SheGuardColors.Primary, fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    removalNotice?.let { notice ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = notice, color = SheGuardColors.EmeraldText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (reportsState.size >= MAX_SAVED_REPORTS) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "You can save up to $MAX_SAVED_REPORTS reports. Remove an existing report to save a new one.",
+                            color = SheGuardColors.AmberText,
+                            fontSize = 12.sp
                         )
                     }
 
@@ -832,7 +1078,7 @@ fun SheGuardReportingScreen(
                         )
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            reportsState.take(8).forEach { report ->
+                            reportsState.take(MAX_SAVED_REPORTS).forEach { report ->
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -844,14 +1090,16 @@ fun SheGuardReportingScreen(
                                     Column {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
                                                 text = report.category.name.replace("_", " "),
                                                 color = SheGuardColors.Primary,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp
+                                                fontSize = 13.sp,
+                                                modifier = Modifier.weight(1f)
                                             )
+                                            Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(report.timestamp)),
                                                 color = SheGuardColors.TextMuted,
@@ -891,6 +1139,15 @@ fun SheGuardReportingScreen(
                                             color = SheGuardColors.TextSecondary,
                                             fontSize = 10.sp,
                                             modifier = Modifier.padding(top = 3.dp)
+                                        )
+                                        Text(
+                                            text = "Remove Report",
+                                            color = SheGuardColors.RoseText,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .padding(top = 6.dp)
+                                                .clickable { reportToRemove = report }
                                         )
                                     }
                                 }
@@ -936,24 +1193,25 @@ private fun HazardCategoryChip(
                 shape = RoundedCornerShape(14.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = icon, fontSize = 15.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = displayName,
-                    color = if (isSelected) SheGuardColors.Primary else SheGuardColors.TextPrimary,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    fontSize = 12.sp
-                )
-            }
+            Text(text = icon, fontSize = 15.sp)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = displayName,
+                color = if (isSelected) SheGuardColors.Primary else SheGuardColors.TextPrimary,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f)
+            )
             if (isSelected) {
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(text = "✓", color = SheGuardColors.Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }

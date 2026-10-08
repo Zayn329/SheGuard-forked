@@ -1,7 +1,10 @@
 package org.sahara.core.data.repository
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.sahara.core.data.db.AuditEventDao
 import org.sahara.core.data.db.AuditEventEntity
 import org.sahara.core.data.db.EvidenceDao
@@ -31,6 +34,7 @@ import org.sahara.core.domain.repository.AuditRepository
 import org.sahara.core.domain.repository.ContactRepository
 import org.sahara.core.domain.repository.EvidenceRepository
 import org.sahara.core.domain.repository.IncidentRepository
+import org.sahara.core.domain.repository.MAX_SAVED_REPORTS
 import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.core.domain.repository.PatternRepository
 import java.util.UUID
@@ -86,8 +90,28 @@ class PatternRepositoryImpl(private val patternDao: SpatioTemporalPatternDao) : 
 }
 
 class MicroReportRepositoryImpl(private val microReportDao: MicroReportDao) : MicroReportRepository {
-    override suspend fun saveReport(report: MicroReport) {
+    private companion object {
+        val saveLock = Mutex()
+    }
+
+    override suspend fun saveReport(report: MicroReport): Boolean = saveLock.withLock {
+        // Count comes from the actual persisted rows; the lock makes check+insert atomic
+        // across every entry point (UI, foreground service) in this process.
+        val existing = microReportDao.getAllReports().first()
+        val isUpdateOfExisting = existing.any { it.reportId == report.reportId.toString() }
+        if (!isUpdateOfExisting && existing.size >= MAX_SAVED_REPORTS) {
+            return@withLock false
+        }
         microReportDao.insertReport(report.toEntity())
+        true
+    }
+
+    override suspend fun getReportCount(): Int = microReportDao.getAllReports().first().size
+
+    override suspend fun deleteReport(id: UUID) {
+        saveLock.withLock {
+            microReportDao.deleteReportById(id.toString())
+        }
     }
 
     override fun getAllReports(): Flow<List<MicroReport>> {

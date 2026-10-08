@@ -65,8 +65,7 @@ fun DetectionLogScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
@@ -74,7 +73,7 @@ fun DetectionLogScreen(
                     .background(SheGuardColors.PrimaryContainer)
                     .border(1.dp, SheGuardColors.BorderHighlight, RoundedCornerShape(12.dp))
                     .clickable { onBack() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Text(
                     text = "← Back",
@@ -88,7 +87,13 @@ fun DetectionLogScreen(
                 text = "Real-Time Detection Log",
                 color = SheGuardColors.TextPrimary,
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontSize = 17.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
             )
 
             if (events.isNotEmpty()) {
@@ -98,7 +103,7 @@ fun DetectionLogScreen(
                         .background(SheGuardColors.RoseBg)
                         .border(1.dp, SheGuardColors.RoseBorder, RoundedCornerShape(12.dp))
                         .clickable { DetectionLogManager.clearLogs() }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     Text(
                         text = "Clear",
@@ -108,7 +113,7 @@ fun DetectionLogScreen(
                     )
                 }
             } else {
-                Spacer(modifier = Modifier.width(50.dp))
+                Spacer(modifier = Modifier.width(64.dp))
             }
         }
 
@@ -159,6 +164,7 @@ fun DetectionLogScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(events, key = { it.id }) { logItem ->
@@ -290,19 +296,24 @@ fun DetectionLogCard(
                     Text(
                         text = "Label: ",
                         color = SheGuardColors.TextSecondary,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        maxLines = 1
                     )
                     Text(
                         text = event.signal.label ?: "detected",
                         color = SheGuardColors.TextPrimary,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "Confidence: ",
                         color = SheGuardColors.TextSecondary,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        maxLines = 1
                     )
                     Text(
                         text = "%.0f%%".format(event.signal.confidence * 100),
@@ -320,7 +331,7 @@ fun DetectionLogCard(
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (isPlaying) SheGuardColors.RoseDanger else SheGuardColors.Primary)
                         .clickable { onPlayClick() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
                     Text(
                         text = if (isPlaying) "Stop" else "▶ Play",
