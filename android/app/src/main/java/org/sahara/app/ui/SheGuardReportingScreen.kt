@@ -7,8 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,8 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,16 +28,13 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import org.sahara.app.location.DeviceLocationManager
 import org.sahara.app.location.LocationState
-import org.sahara.app.location.SheGuardLocation
 import org.sahara.core.domain.engine.RisingPatternAlertEngine
 import org.sahara.core.domain.engine.SpatioTemporalPatternEngine
 import org.sahara.core.domain.engine.TrustAndAntiGamingEvaluator
@@ -49,17 +42,16 @@ import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.PatternState
 import org.sahara.core.domain.models.ReportCategory
 import org.sahara.core.domain.models.RisingPatternAlert
-import org.sahara.core.domain.models.SpatioTemporalPattern
 import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.models.TrustLevel
 import org.sahara.core.domain.repository.MAX_SAVED_REPORTS
 import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.core.domain.repository.PatternRepository
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
-import org.sahara.app.sync.ReportUploader
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
+import org.sahara.app.sync.ReportUploader
 
 
 /** Safely unwraps a Context (possibly wrapped by Compose/Hilt/etc.) to its Activity. */
@@ -76,7 +68,7 @@ fun SheGuardReportingScreen(
     patternRepository: PatternRepository? = null,
     alertRepository: org.sahara.core.domain.repository.AlertRepository? = null,
     meshAdapter: SheGuardMeshAdapter? = null,
-    anonymousToken: String = ReportUploader.reporterToken(androidx.compose.ui.platform.LocalContext.current),
+    anonymousToken: String = ReportUploader.reporterToken(LocalContext.current),
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {

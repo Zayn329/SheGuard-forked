@@ -43,6 +43,7 @@
     <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH_ADMIN" />
 
     <application
+        android:name=".SaharaApplication"
         android:allowBackup="false"
         android:label="Sahara Companion"
         android:supportsRtl="true"

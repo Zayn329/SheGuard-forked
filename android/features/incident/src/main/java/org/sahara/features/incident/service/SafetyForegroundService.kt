@@ -38,12 +38,14 @@ import org.sahara.core.data.repository.ContactRepositoryImpl
 import org.sahara.core.data.repository.IncidentRepositoryImpl
 import org.sahara.core.data.repository.MicroReportRepositoryImpl
 import org.sahara.core.data.repository.PatternRepositoryImpl
+import org.sahara.core.data.sync.ReportSyncRegistry
 import org.sahara.core.domain.engine.SpatioTemporalPatternEngine
 import org.sahara.core.domain.engine.TrustAndAntiGamingEvaluator
 import org.sahara.core.domain.models.DetectorType
 import org.sahara.core.domain.models.MicroReport
 import org.sahara.core.domain.models.ReportCategory
 import org.sahara.core.domain.models.SyncStatus
+import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.features.notifycircle.manager.NotifyCircleManager
 import org.sahara.services.mesh.fallback.EscalationFallbackManager
 import org.sahara.services.mesh.relay.NearbyConnectionsMeshRelay
@@ -228,6 +230,18 @@ class SafetyForegroundService : Service(), SensorEventListener {
                     // Saved-report limit reached: never delete existing reports automatically.
                     android.util.Log.w("Sahara", "Automated sensor report not saved: saved report limit reached")
                     return@launch
+                }
+
+                // Trigger sync to upload the newly saved report.
+                // The handler is registered by the app module (SaharaApplication); if it is not
+                // registered yet the report simply stays LOCAL and is uploaded on a later sync.
+                val repo: MicroReportRepository = microReportRepo
+                try {
+                    ReportSyncRegistry.handler?.invoke(repo)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    android.util.Log.w("Sahara", "Report sync handler failed: ${e.message}")
                 }
 
                 val allReports = microReportRepo.getAllReports().first()

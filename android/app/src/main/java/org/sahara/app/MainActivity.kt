@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -38,6 +40,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import org.sahara.app.export.EvidenceExporter
 import org.sahara.app.export.ExportPackage
+import org.sahara.app.sync.ReportUploader
 import org.sahara.app.ui.ActiveIncidentScreen
 import org.sahara.app.ui.AnchoringScreen
 import org.sahara.app.ui.AuthScreen
@@ -196,6 +199,8 @@ class MainActivity : ComponentActivity() {
             foregroundService?.stateMachine = stateMachine
             foregroundService?.evidenceCaptureEngine = captureEngine
             foregroundService?.setDetectionPaused(!monitoringEnabled.value)
+            // Report upload is wired through ReportSyncRegistry (set in SaharaApplication),
+            // so no per-binding sync callback is needed here.
             isServiceBound = true
         }
 
@@ -340,6 +345,20 @@ class MainActivity : ComponentActivity() {
         val serviceIntent = Intent(this, SafetyForegroundService::class.java)
         startService(serviceIntent)
         bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+
+        // Start periodic sync for offline reports
+        lifecycleScope.launch {
+            while (isActive) {
+                delay(30000) // Sync every 30 seconds
+                try {
+                    ReportUploader.syncPending(microReportRepository)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "Periodic sync failed: ${e.message}")
+                }
+            }
+        }
 
         setContent {
             SaharaTheme {

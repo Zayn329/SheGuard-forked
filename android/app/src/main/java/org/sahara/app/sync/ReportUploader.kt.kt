@@ -8,6 +8,7 @@ import org.json.JSONObject
 import org.sahara.app.ui.SaharaApiClient
 import org.sahara.core.domain.models.SyncStatus
 import org.sahara.core.domain.repository.MicroReportRepository
+import android.util.Log
 import java.util.UUID
 
 /**
@@ -17,6 +18,7 @@ import java.util.UUID
  *   free-text contextDescription is NEVER uploaded, no login / user id is sent.
  */
 object ReportUploader {
+    private const val TAG = "ReportUploader"
     private const val PREFS = "sheguard_prefs"
     private const val KEY_TOKEN = "reporter_token"
 
@@ -39,6 +41,7 @@ object ReportUploader {
         return try {
             val pending = repository.getAllReports().first()
                 .filter { it.syncStatus != SyncStatus.SYNCED && it.latitude != null && it.longitude != null }
+            Log.d(TAG, "syncPending: ${pending.size} pending report(s)")
             if (pending.isEmpty()) return 0
 
             val arr = JSONArray()
@@ -57,6 +60,7 @@ object ReportUploader {
 
             // bearerToken = null -> upload endpoint is open (no OTP needed)
             val resp = JSONObject(SaharaApiClient.postJson("/api/v1/reports/batch", body, bearerToken = null))
+            Log.d(TAG, "syncPending: server response = $resp")
             val accepted = resp.getJSONArray("accepted_report_ids")
                 .let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
 
@@ -69,6 +73,7 @@ object ReportUploader {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Log.w(TAG, "syncPending FAILED: ${e.javaClass.simpleName}: ${e.message}")
             0 // offline / server down: keep LOCAL, retry on next call
         }
     }
