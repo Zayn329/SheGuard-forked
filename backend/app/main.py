@@ -22,6 +22,7 @@ from app.models.schemas import (
 )
 from app.agents.legal_agent import LegalAgent, MANDATORY_LEGAL_DISCLAIMER
 from app.agents.ai_agent import AIAgent, AIProviderUnavailableError
+from app.dashboard import make_router
 
 # Initialize database tables
 try:
@@ -80,6 +81,7 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json"
 )
 
+app.include_router(make_router())
 legal_agent = LegalAgent()
 ai_agent = AIAgent()
 

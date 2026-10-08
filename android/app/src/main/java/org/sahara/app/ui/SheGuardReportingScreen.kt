@@ -56,9 +56,11 @@ import org.sahara.core.domain.repository.MAX_SAVED_REPORTS
 import org.sahara.core.domain.repository.MicroReportRepository
 import org.sahara.core.domain.repository.PatternRepository
 import org.sahara.services.mesh.relay.SheGuardMeshAdapter
+import org.sahara.app.sync.ReportUploader
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
+
 
 /** Safely unwraps a Context (possibly wrapped by Compose/Hilt/etc.) to its Activity. */
 private tailrec fun Context.findActivity(): Activity? = when (this) {
@@ -74,7 +76,7 @@ fun SheGuardReportingScreen(
     patternRepository: PatternRepository? = null,
     alertRepository: org.sahara.core.domain.repository.AlertRepository? = null,
     meshAdapter: SheGuardMeshAdapter? = null,
-    anonymousToken: String = UUID.randomUUID().toString().take(12),
+    anonymousToken: String = ReportUploader.reporterToken(androidx.compose.ui.platform.LocalContext.current),
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -238,6 +240,7 @@ fun SheGuardReportingScreen(
     val isMeshConnected = transportStatus == org.sahara.services.mesh.transport.MeshTransportStatus.CONNECTED
 
     val reportsState by repository.getAllReports().collectAsState(initial = emptyList())
+    LaunchedEffect(Unit) { ReportUploader.syncPending(repository) }
     val persistedAlerts: List<RisingPatternAlert> by (
             alertRepository?.getAllAlerts()?.collectAsState(initial = emptyList<RisingPatternAlert>())
                 ?: remember { mutableStateOf(emptyList<RisingPatternAlert>()) }
@@ -825,7 +828,7 @@ fun SheGuardReportingScreen(
                                         actualMeshAdapter.queueAlertForRelay(alert)
                                     }
                                 }
-
+                                coroutineScope.launch { ReportUploader.syncPending(repository) }
                                 contextText = ""
                                 isSubmitting = false
                                 showConfirmation = true

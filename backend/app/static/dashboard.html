@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SheGuard Responder Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;color:#222}
+header{background:#b5179e;color:#fff;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;flex:1}header select,header button{padding:5px 8px}
+main{flex:1;display:flex;min-height:0}#map{flex:1}
+aside{width:340px;overflow:auto;border-left:1px solid #ddd;background:#fafafa}
+.card{padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer;border-left:5px solid #ccc}
+.card.HIGH{border-color:#d62828}.card.MEDIUM{border-color:#f77f00}.card.LOW{border-color:#fcbf49}.card.RESOLVED{opacity:.5}
+.card b{display:block}.meta{color:#666;font-size:12px;margin:3px 0}
+.tag{font-size:11px;padding:1px 6px;border-radius:8px;background:#eee;margin-right:4px}.tag.v{background:#d8f3dc}
+.acts button{margin:4px 4px 0 0;padding:4px 8px;font-size:12px}
+#note{padding:8px 12px;font-size:12px;background:#fff3cd}
+@media(max-width:700px){main{flex-direction:column}aside{width:100%;height:45%}}
+</style></head><body>
+<header><h1>SheGuard · Community Responder Dashboard</h1>
+<label>Last <select id="hrs"><option>6</option><option selected>24</option><option>72</option><option>168</option></select> hours</label>
+<input id="who" placeholder="Your org (e.g. Mahila Mandal, Andheri)" size="28">
+<button id="seed" style="display:none">Load demo data</button><span id="upd"></span></header>
+<div id="note">Early-warning hotspots from anonymous community reports. Locations are approximate (neighbourhood level). Not an emergency service — in immediate danger call 112.</div>
+<main><div id="map"></div><aside id="list"></aside></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const KEY=sessionStorage.getItem('rk')||prompt('Responder access key:');sessionStorage.setItem('rk',KEY||'');
+const H={'X-Responder-Key':KEY,'Content-Type':'application/json'};
+const map=L.map('map').setView([19.076,72.8777],11);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const layer=L.layerGroup().addTo(map),COL={HIGH:'#d62828',MEDIUM:'#f77f00',LOW:'#fcbf49'};
+const $=id=>document.getElementById(id),ago=t=>{const m=Math.round((Date.now()-t)/6e4);return m<60?m+' min ago':Math.round(m/60)+' h ago'};
+const nice=s=>s.replace(/_/g,' ').toLowerCase();let markers={},fitted=false;
+async function setStatus(id,status){
+  await fetch(`/api/v1/dashboard/clusters/${id}/status`,{method:'POST',headers:H,body:JSON.stringify({status,responder:$('who').value})});load();}
+async function load(){
+  const r=await fetch(`/api/v1/dashboard/clusters?hours=${$('hrs').value}`,{headers:H});
+  if(!r.ok){$('list').innerHTML='<p style="padding:12px">'+(r.status==401?'Wrong access key. Reload and retry.':'Dashboard unavailable ('+r.status+')')+'</p>';return;}
+  const {clusters}=await r.json();layer.clearLayers();markers={};$('list').innerHTML='';
+  if(!clusters.length)$('list').innerHTML='<p style="padding:12px">No active hotspots in this window.</p>';
+  clusters.forEach(c=>{
+    const col=c.status==='RESOLVED'?'#999':COL[c.priority];
+    const circ=L.circle([c.lat,c.lng],{radius:c.radius_m,color:col,fillColor:col,fillOpacity:.3}).addTo(layer);
+    const dot=L.circleMarker([c.lat,c.lng],{radius:7,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(layer);
+    const txt=`<b>${nice(c.category)}</b><br>${c.report_count} reports · ${c.unique_reporters} reporters`;
+    dot.bindPopup(txt);markers[c.cluster_id]=dot;
+    const el=document.createElement('div');el.className=`card ${c.status==='RESOLVED'?'RESOLVED':c.priority}`;
+    el.innerHTML=`<b>${nice(c.category)} <span class="tag">${c.priority}</span><span class="tag ${c.verified?'v':''}">${c.verified?'verified':'unverified'}</span></b>
+      <div class="meta">${c.report_count} reports · ${c.unique_reporters} reporters · latest ${ago(c.last_ts)}<br>${c.area||''}<br>Status: <b>${c.status}</b>${c.responder?' · '+c.responder:''}</div>
+      <div class="acts">${['ACKNOWLEDGED','DISPATCHED','RESOLVED'].map(s=>`<button data-s="${s}">${nice(s)}</button>`).join('')}</div>`;
+    el.onclick=()=>{map.flyTo([c.lat,c.lng],16);dot.openPopup();};
+    el.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();setStatus(c.cluster_id,b.dataset.s);});
+    $('list').appendChild(el);
+  });
+  if(clusters.length&&!fitted){map.fitBounds(clusters.map(c=>[c.lat,c.lng]),{maxZoom:14,padding:[40,40]});fitted=true;}
+  $('upd').textContent='Updated '+new Date().toLocaleTimeString();
+}
+$('hrs').onchange=load;
+$('seed').onclick=async()=>{await fetch('/api/v1/dashboard/demo-seed',{method:'POST',headers:H});load();};
+fetch('/api/v1/dashboard/demo-seed',{method:'OPTIONS'}).then(()=>{if(location.search.includes('demo'))$('seed').style.display='inline'});
+load();setInterval(load,15000);
+</script></body></html>
