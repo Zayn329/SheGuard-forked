@@ -1,4 +1,4 @@
-"""SheGuard responder dashboard: report ingestion + clustering + responder API.
+    """SheGuard responder dashboard: report ingestion + clustering + responder API.
 
 Wire-up in app/main.py (2 lines):
     from app.dashboard import make_router

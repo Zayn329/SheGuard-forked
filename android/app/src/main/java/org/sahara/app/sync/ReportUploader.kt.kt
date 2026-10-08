@@ -1,6 +1,7 @@
 package org.sahara.app.sync
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,7 +34,7 @@ object ReportUploader {
         address.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             .takeLast(4).take(2).joinToString(", ")
 
-    /** Returns number of reports uploaded. Never throws. */
+    /** Returns number of reports uploaded. Never throws (except coroutine cancellation). */
     suspend fun syncPending(repository: MicroReportRepository): Int {
         return try {
             val pending = repository.getAllReports().first()
@@ -56,7 +57,8 @@ object ReportUploader {
 
             // bearerToken = null -> upload endpoint is open (no OTP needed)
             val resp = JSONObject(SaharaApiClient.postJson("/api/v1/reports/batch", body, bearerToken = null))
-            val accepted = resp.getJSONArray("accepted_report_ids").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
+            val accepted = resp.getJSONArray("accepted_report_ids")
+                .let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
 
             var uploaded = 0
             pending.filter { it.reportId.toString() in accepted }.forEach {
@@ -64,6 +66,8 @@ object ReportUploader {
                 uploaded++
             }
             uploaded
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             0 // offline / server down: keep LOCAL, retry on next call
         }

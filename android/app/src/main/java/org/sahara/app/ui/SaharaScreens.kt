@@ -2021,7 +2021,7 @@ fun AnchoringScreen(onBack: () -> Unit) {
 }
 
 object SaharaApiClient {
-    var baseUrl = "https://sheguard-xyz.onrender.com"
+    var baseUrl = "https://sheguard-dashboard.onrender.com"
     var savedAccessToken: String? = null
 
     suspend fun generateLegalDraft(
@@ -2059,8 +2059,8 @@ object SaharaApiClient {
             conn.setRequestProperty("Authorization", "Bearer $bearerToken")
         }
         conn.doOutput = true
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
+        conn.connectTimeout = 20000
+        conn.readTimeout = 20000
 
         conn.outputStream.use { os ->
             os.write(jsonBody.toByteArray(Charsets.UTF_8))
@@ -2085,8 +2085,8 @@ object SaharaApiClient {
             conn.setRequestProperty("Authorization", "Bearer $bearerToken")
         }
         conn.doOutput = true
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
+        conn.connectTimeout = 20000
+        conn.readTimeout = 20000
 
         conn.outputStream.use { os ->
             os.write(jsonBody.toByteArray(Charsets.UTF_8))
