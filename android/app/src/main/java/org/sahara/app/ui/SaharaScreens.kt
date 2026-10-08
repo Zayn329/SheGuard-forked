@@ -2021,7 +2021,7 @@ fun AnchoringScreen(onBack: () -> Unit) {
 }
 
 object SaharaApiClient {
-    var baseUrl = "http://10.0.2.2:8000"
+    var baseUrl = "https://sheguard-xyz.onrender.com"
     var savedAccessToken: String? = null
 
     suspend fun generateLegalDraft(
