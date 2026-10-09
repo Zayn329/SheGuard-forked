@@ -251,9 +251,10 @@ const hdr=()=>({'X-Responder-Key':KEY,'Content-Type':'application/json'});
 /* ---------- map ---------- */
 const map=L.map('map',{zoomControl:false}).setView([19.076,72.8777],11);
 L.control.zoom({position:'bottomright'}).addTo(map);
-// Basemap. Works with no key by default (OpenStreetMap, fine for a small responder team).
-// For the cleaner CARTO look, get a free key at https://carto.com/basemaps/apikey and paste it here.
-const CARTO_KEY='';
+// Basemap. The server injects CARTO_API_KEY (env var) into the placeholder below.
+// No key set -> falls back to keyless OpenStreetMap tiles.
+const CARTO_RAW='__CARTO_KEY__';
+const CARTO_KEY=CARTO_RAW.startsWith('__')?'':CARTO_RAW;
 const ATTR='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 if(CARTO_KEY){
   L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_KEY)}`,{maxZoom:19,attribution:ATTR+' © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);

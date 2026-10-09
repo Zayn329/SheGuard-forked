@@ -6,13 +6,13 @@ Wire-up in app/main.py (2 lines):
 
 Report upload is OPEN (no login, anonymous) but rate-limited per reporter token and per IP.
 """
-import hashlib, hmac, math, os, time
+import hashlib, hmac, math, os, re, time
 from pathlib import Path
 from typing import List, Literal, Optional
 
 from collections import defaultdict, deque
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, Column, Float, String
 from sqlalchemy.orm import Session
@@ -216,6 +216,9 @@ def make_router() -> APIRouter:
 
     @router.get("/dashboard", include_in_schema=False)
     def page():
-        return FileResponse(Path(__file__).parent / "static" / "dashboard.html")
+        html = (Path(__file__).parent / "static" / "dashboard.html").read_text(encoding="utf-8")
+        # Basemap key comes from the environment, never from the repo. Keep only key-safe characters.
+        key = re.sub(r"[^A-Za-z0-9_.\-]", "", os.getenv("CARTO_API_KEY", ""))
+        return HTMLResponse(html.replace("__CARTO_KEY__", key), headers={"Cache-Control": "no-store"})
 
     return router
