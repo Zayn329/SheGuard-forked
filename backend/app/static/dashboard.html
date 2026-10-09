@@ -1,63 +1,383 @@
 <!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SheGuard Responder Dashboard</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;color:#222}
-header{background:#b5179e;color:#fff;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-header h1{font-size:16px;margin:0;flex:1}header select,header button{padding:5px 8px}
-main{flex:1;display:flex;min-height:0}#map{flex:1}
-aside{width:340px;overflow:auto;border-left:1px solid #ddd;background:#fafafa}
-.card{padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer;border-left:5px solid #ccc}
-.card.HIGH{border-color:#d62828}.card.MEDIUM{border-color:#f77f00}.card.LOW{border-color:#fcbf49}.card.RESOLVED{opacity:.5}
-.card b{display:block}.meta{color:#666;font-size:12px;margin:3px 0}
-.tag{font-size:11px;padding:1px 6px;border-radius:8px;background:#eee;margin-right:4px}.tag.v{background:#d8f3dc}
-.acts button{margin:4px 4px 0 0;padding:4px 8px;font-size:12px}
-#note{padding:8px 12px;font-size:12px;background:#fff3cd}
-@media(max-width:700px){main{flex-direction:column}aside{width:100%;height:45%}}
-</style></head><body>
-<header><h1>SheGuard · Community Responder Dashboard</h1>
-<label>Last <select id="hrs"><option>6</option><option selected>24</option><option>72</option><option>168</option></select> hours</label>
-<input id="who" placeholder="Your org (e.g. Mahila Mandal, Andheri)" size="28">
-<button id="seed" style="display:none">Load demo data</button><span id="upd"></span></header>
-<div id="note">Early-warning hotspots from anonymous community reports. Locations are approximate (neighbourhood level). Not an emergency service — in immediate danger call 112.</div>
-<main><div id="map"></div><aside id="list"></aside></main>
+:root{
+  --bg:#FFFBFB; --panel:#FFF7F8; --surface:#fff; --blush:#FFF1F2;
+  --line:#F2DDE2; --line-strong:#E6C5CD;
+  --ink:#1E1B22; --ink-2:#5F5864; --ink-3:#7A707D;
+  --rose:#E11D48; --rose-dark:#BE123C;
+  --high:#E11D48; --high-bg:#FFF1F2; --high-ink:#9F1239;
+  --med:#D97706;  --med-bg:#FFFBEB;  --med-ink:#92400E;
+  --low:#0284C7;  --low-bg:#E0F2FE;  --low-ink:#075985;
+  --ok:#059669;   --ok-bg:#ECFDF5;   --ok-ink:#065F46;
+  --done:#9A9099;
+  --shadow:0 1px 2px rgba(225,29,72,.06),0 8px 24px rgba(60,20,35,.08);
+  --font:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:14px/1.45 var(--font);color:var(--ink);background:var(--bg);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:100dvh;overflow:hidden}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--rose-dark);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- header ---------- */
+.top{display:flex;align-items:center;gap:16px 24px;flex-wrap:wrap;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--line);z-index:1000}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.mark{width:36px;height:36px;border-radius:11px;background:linear-gradient(145deg,#F43F5E,#BE123C);display:grid;place-items:center;box-shadow:0 4px 12px rgba(225,29,72,.28)}
+.brand h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.15}
+.brand p{margin:0;font-size:12px;color:var(--ink-2)}
+.controls{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+.seg{display:flex;background:var(--blush);border-radius:12px;padding:3px}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:9px;font-weight:600;font-size:13px;color:var(--ink-2);cursor:pointer}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(60,20,35,.14)}
+.field input{width:250px;max-width:100%;padding:8px 12px;border:1px solid var(--line-strong);border-radius:10px;background:#fff}
+.field input::placeholder{color:var(--ink-3)}
+.live{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);padding:6px 10px;border-radius:999px;background:var(--ok-bg)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.live.err{background:var(--med-bg);color:var(--med-ink)}.live.err i{background:var(--med)}
+
+/* ---------- layout ---------- */
+main{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
+.mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:#f4eef0}
+.panel{display:flex;flex-direction:column;min-height:0;background:var(--panel);border-left:1px solid var(--line)}
+
+/* ---------- map furniture ---------- */
+.mapbtn{position:absolute;top:14px;left:14px;z-index:900;display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:12px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+.mapbtn:hover{background:var(--blush)}
+.legend{position:absolute;left:14px;bottom:22px;z-index:900;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:14px;padding:10px 14px;box-shadow:var(--shadow);font-size:12px;color:var(--ink-2);display:grid;gap:5px}
+.legend .row{display:flex;gap:12px;flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.legend small{color:var(--ink-3);font-size:11.5px}
+.pin-wrap{background:none;border:0}
+.pin{position:relative;width:32px;height:32px;border-radius:50%;background:var(--c);color:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(30,27,34,.35);font-weight:700;font-size:13px;line-height:26px;text-align:center}
+.pin.done{opacity:.85}
+.pin.pulse::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--c);animation:ping 2.2s ease-out infinite}
+@keyframes ping{from{transform:scale(1);opacity:.85}to{transform:scale(2.3);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pin.pulse::after{animation:none;transform:scale(1.5);opacity:.5}}
+.leaflet-popup-content-wrapper{border-radius:14px;box-shadow:var(--shadow)}
+.leaflet-popup-content{margin:12px 14px;font:13px/1.4 var(--font);color:var(--ink)}
+.leaflet-popup-content b{display:block;font-size:14px;margin-bottom:2px}
+.leaflet-container a.leaflet-popup-close-button{color:var(--ink-3)}
+.leaflet-bar{border:0!important;box-shadow:var(--shadow)!important;border-radius:12px;overflow:hidden}
+.leaflet-bar a{color:var(--ink);border-bottom-color:var(--line)!important}
+
+/* ---------- summary ---------- */
+.summary{padding:16px 18px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.summary h2{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.summary p{margin:2px 0 12px;font-size:12.5px;color:var(--ink-2)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid var(--line-strong);background:#fff;font-weight:600;font-size:12.5px;cursor:pointer}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.chip span{color:var(--ink-3);font-weight:600}
+.chip:hover{background:var(--blush)}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+.chip[aria-pressed=true] span{color:#d9d3dc}
+
+/* ---------- cards ---------- */
+.list{flex:1;overflow:auto;padding:14px 14px 18px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.card{--pc:var(--done);position:relative;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 14px 14px 18px;box-shadow:inset 4px 0 0 var(--pc),0 1px 2px rgba(60,20,35,.04);cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card[data-p=HIGH]{--pc:var(--high)}.card[data-p=MEDIUM]{--pc:var(--med)}.card[data-p=LOW]{--pc:var(--low)}
+.card.resolved{--pc:var(--done);background:#FCF9FA}
+.card.resolved .c-head,.card.resolved .c-facts{opacity:.7}
+.card:hover{border-color:var(--line-strong)}
+.card.sel{border-color:var(--rose);box-shadow:inset 4px 0 0 var(--pc),0 0 0 3px rgba(225,29,72,.14)}
+.c-head{display:flex;gap:11px;align-items:flex-start}
+.c-ico{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--bg-c,var(--blush));color:var(--ink-c,var(--high-ink))}
+.card[data-p=MEDIUM] .c-ico{--bg-c:var(--med-bg);--ink-c:var(--med-ink)}
+.card[data-p=LOW] .c-ico{--bg-c:var(--low-bg);--ink-c:var(--low-ink)}
+.card.resolved .c-ico{--bg-c:#F3EEF0;--ink-c:var(--ink-3)}
+.c-title{flex:1;min-width:0}
+.c-title h3{margin:0;font-size:15px;font-weight:650;line-height:1.25}
+.c-area{margin:1px 0 0;font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{flex:none;display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650;white-space:nowrap}
+.p-HIGH{background:var(--high-bg);color:var(--high-ink)}.p-MEDIUM{background:var(--med-bg);color:var(--med-ink)}.p-LOW{background:var(--low-bg);color:var(--low-ink)}
+.p-done{background:#F3EEF0;color:var(--ink-2)}
+.c-facts{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:11px 0 0;font-size:12.5px;color:var(--ink-2)}
+.c-facts b{color:var(--ink);font-weight:650}
+.ver{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:#F3EEF0;color:var(--ink-2)}
+.ver.yes{background:var(--ok-bg);color:var(--ok-ink)}
+.steps{list-style:none;margin:13px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.steps li{border-top:4px solid #EFE4E8;border-radius:2px;padding-top:5px;font-size:11px;color:var(--ink-3)}
+.steps li.done{border-color:var(--sc)}
+.steps li.now{border-color:var(--sc);color:var(--ink);font-weight:700}
+.c-by{margin:7px 0 0;font-size:12px;color:var(--ink-2)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.btn{padding:7px 12px;border-radius:10px;border:1px solid var(--line-strong);background:#fff;font-weight:600;font-size:12.5px;cursor:pointer}
+.btn:hover{background:var(--blush)}
+.btn.primary{background:var(--rose);border-color:var(--rose);color:#fff}.btn.primary:hover{background:var(--rose-dark)}
+.btn:disabled{opacity:.55;cursor:progress}
+
+.empty{margin:auto;max-width:290px;text-align:center;padding:28px 8px;color:var(--ink-2)}
+.empty .ring{width:56px;height:56px;border-radius:50%;background:var(--blush);display:grid;place-items:center;margin:0 auto 12px;color:var(--rose)}
+.empty h3{margin:0 0 4px;font-size:16px;color:var(--ink)}.empty p{margin:0;font-size:13px}
+
+.disclaimer{display:flex;gap:10px;align-items:flex-start;padding:12px 18px;background:var(--surface);border-top:1px solid var(--line);font-size:12px;color:var(--ink-2)}
+.disclaimer svg{flex:none;margin-top:1px;color:var(--rose)}
+
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:var(--shadow);transition:opacity .2s,transform .2s;z-index:3000}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{background:var(--high-ink)}
+
+/* ---------- access dialog ---------- */
+dialog{border:0;border-radius:24px;padding:28px;width:min(400px,calc(100vw - 32px));box-shadow:0 24px 60px rgba(60,20,35,.3)}
+dialog::backdrop{background:rgba(30,27,34,.5);backdrop-filter:blur(3px)}
+dialog .mark{margin-bottom:14px;width:44px;height:44px;border-radius:14px}
+dialog h2{margin:0 0 4px;font-size:20px}
+dialog p{margin:0 0 16px;color:var(--ink-2);font-size:13.5px}
+dialog input{width:100%;padding:11px 14px;border:1px solid var(--line-strong);border-radius:12px;font-size:15px}
+dialog .err{color:var(--high-ink);font-size:13px;margin:8px 0 0;min-height:1.4em}
+dialog .btn{width:100%;margin-top:6px;padding:11px;font-size:14px;border-radius:12px}
+
+@media(max-width:860px){
+  .top{padding:10px 14px;gap:10px}
+  .brand{flex:1;margin-right:0}.brand p{display:none}.mark{width:32px;height:32px;border-radius:10px}
+  .controls{display:contents}
+  .live{order:2;padding:5px 9px}
+  .seg{order:3;flex:1 1 auto}.seg button{flex:1;padding:6px 8px}
+  .field{order:4;flex:1 1 100%}.field input{width:100%}
+  #seed{order:5}
+  main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,38%) minmax(0,1fr)}
+  .panel{border-left:0;border-top:1px solid var(--line)}
+  .legend{display:none}
+  .summary{padding:12px 14px 10px}.summary h2{font-size:16px}.summary p{margin-bottom:8px}
+  .list{padding:10px}
+  .disclaimer{padding:8px 14px;font-size:11.5px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.1 7.5 9.5 4.4-1.4 7.5-4.9 7.5-9.5V6L12 3z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>
+    </div>
+    <div><h1>SheGuard</h1><p>Community responder dashboard</p></div>
+  </div>
+  <div class="controls">
+    <div class="seg" id="hrs" role="group" aria-label="Time window">
+      <button data-h="6"   aria-pressed="false">6h</button>
+      <button data-h="24"  aria-pressed="true">24h</button>
+      <button data-h="72"  aria-pressed="false">3 days</button>
+      <button data-h="168" aria-pressed="false">7 days</button>
+    </div>
+    <div class="field"><label class="sr" for="who">Your organisation</label>
+      <input id="who" placeholder="Your organisation name" maxlength="60" autocomplete="off"></div>
+    <button id="seed" class="btn" hidden>Load demo data</button>
+    <div class="live" id="live" role="status"><i></i><span id="upd">Connecting…</span></div>
+  </div>
+</header>
+
+<main>
+  <section class="mapwrap" aria-label="Hotspot map">
+    <div id="map"></div>
+    <button id="fit" class="mapbtn" type="button">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg>
+      Show all hotspots
+    </button>
+    <div class="legend" aria-label="Map legend">
+      <div class="row">
+        <span><i style="--c:var(--high)"></i>High</span><span><i style="--c:var(--med)"></i>Medium</span>
+        <span><i style="--c:var(--low)"></i>Low</span><span><i style="--c:var(--done)"></i>Resolved</span>
+      </div>
+      <small>Number = reports · shaded circle = approximate area</small>
+    </div>
+  </section>
+
+  <aside class="panel" aria-label="Hotspots">
+    <div class="summary">
+      <h2 id="sumT">Hotspots</h2><p id="sumS"></p>
+      <div class="chips" id="chips" role="group" aria-label="Filter by priority"></div>
+    </div>
+    <div class="list" id="list" aria-live="polite"></div>
+    <div class="disclaimer">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>
+      <span>Early-warning hotspots from anonymous community reports. Locations are approximate (neighbourhood level). This is not an emergency service. In immediate danger, call 112.</span>
+    </div>
+  </aside>
+</main>
+
+<div id="toast" role="status"></div>
+
+<dialog id="gate" aria-labelledby="gateT">
+  <form id="gateForm">
+    <div class="mark" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.1 7.5 9.5 4.4-1.4 7.5-4.9 7.5-9.5V6L12 3z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg></div>
+    <h2 id="gateT">Responder access</h2>
+    <p>Enter the access key your coordinator gave you to see community hotspots.</p>
+    <label class="sr" for="key">Responder access key</label>
+    <input id="key" type="password" autocomplete="off" required>
+    <p class="err" id="gateErr" role="alert"></p>
+    <button class="btn primary" type="submit">Open dashboard</button>
+  </form>
+</dialog>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-const KEY=sessionStorage.getItem('rk')||prompt('Responder access key:');sessionStorage.setItem('rk',KEY||'');
-const H={'X-Responder-Key':KEY,'Content-Type':'application/json'};
-const map=L.map('map').setView([19.076,72.8777],11);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-const layer=L.layerGroup().addTo(map),COL={HIGH:'#d62828',MEDIUM:'#f77f00',LOW:'#fcbf49'};
-const $=id=>document.getElementById(id),ago=t=>{const m=Math.round((Date.now()-t)/6e4);return m<60?m+' min ago':Math.round(m/60)+' h ago'};
-const nice=s=>s.replace(/_/g,' ').toLowerCase();let markers={},fitted=false;
-async function setStatus(id,status){
-  await fetch(`/api/v1/dashboard/clusters/${id}/status`,{method:'POST',headers:H,body:JSON.stringify({status,responder:$('who').value})});load();}
-async function load(){
-  const r=await fetch(`/api/v1/dashboard/clusters?hours=${$('hrs').value}`,{headers:H});
-  if(!r.ok){$('list').innerHTML='<p style="padding:12px">'+(r.status==401?'Wrong access key. Reload and retry.':'Dashboard unavailable ('+r.status+')')+'</p>';return;}
-  const {clusters}=await r.json();layer.clearLayers();markers={};$('list').innerHTML='';
-  if(!clusters.length)$('list').innerHTML='<p style="padding:12px">No active hotspots in this window.</p>';
-  clusters.forEach(c=>{
-    const col=c.status==='RESOLVED'?'#999':COL[c.priority];
-    const circ=L.circle([c.lat,c.lng],{radius:c.radius_m,color:col,fillColor:col,fillOpacity:.3}).addTo(layer);
-    const dot=L.circleMarker([c.lat,c.lng],{radius:7,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(layer);
-    const txt=`<b>${nice(c.category)}</b><br>${c.report_count} reports · ${c.unique_reporters} reporters`;
-    dot.bindPopup(txt);markers[c.cluster_id]=dot;
-    const el=document.createElement('div');el.className=`card ${c.status==='RESOLVED'?'RESOLVED':c.priority}`;
-    el.innerHTML=`<b>${nice(c.category)} <span class="tag">${c.priority}</span><span class="tag ${c.verified?'v':''}">${c.verified?'verified':'unverified'}</span></b>
-      <div class="meta">${c.report_count} reports · ${c.unique_reporters} reporters · latest ${ago(c.last_ts)}<br>${c.area||''}<br>Status: <b>${c.status}</b>${c.responder?' · '+c.responder:''}</div>
-      <div class="acts">${['ACKNOWLEDGED','DISPATCHED','RESOLVED'].map(s=>`<button data-s="${s}">${nice(s)}</button>`).join('')}</div>`;
-    el.onclick=()=>{map.flyTo([c.lat,c.lng],16);dot.openPopup();};
-    el.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();setStatus(c.cluster_id,b.dataset.s);});
-    $('list').appendChild(el);
-  });
-  if(clusters.length&&!fitted){map.fitBounds(clusters.map(c=>[c.lat,c.lng]),{maxZoom:14,padding:[40,40]});fitted=true;}
-  $('upd').textContent='Updated '+new Date().toLocaleTimeString();
+const $=id=>document.getElementById(id);
+// Reports contain free text typed by anonymous users: never put it in innerHTML unescaped.
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store={get:k=>{try{return sessionStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{sessionStorage.setItem(k,v)}catch(e){}},del:k=>{try{sessionStorage.removeItem(k)}catch(e){}}};
+const lstore={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+
+const COL={HIGH:'#E11D48',MEDIUM:'#D97706',LOW:'#0284C7',DONE:'#9A9099'};
+const PN={HIGH:'High',MEDIUM:'Medium',LOW:'Low'};
+const ST=['NEW','ACKNOWLEDGED','DISPATCHED','RESOLVED'];
+const STN={NEW:'New',ACKNOWLEDGED:'Acknowledged',DISPATCHED:'Dispatched',RESOLVED:'Resolved'};
+const STV={ACKNOWLEDGED:'Acknowledge',DISPATCHED:'Dispatch',RESOLVED:'Resolve'};
+const STC={NEW:'#E11D48',ACKNOWLEDGED:'#D97706',DISPATCHED:'#0284C7',RESOLVED:'#059669'};
+const CAT={
+  POOR_LIGHTING:{n:'Poor lighting',i:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/>'},
+  HARASSMENT:{n:'Harassment',i:'<path d="M12 3 2.5 19.5h19L12 3z"/><path d="M12 10v4M12 17v.01"/>'},
+  FEELING_FOLLOWED:{n:'Feeling followed',i:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'},
+  UNSAFE_GATHERING:{n:'Unsafe gathering',i:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20v-1.5A4.5 4.5 0 0 1 7 14h4a4.5 4.5 0 0 1 4.5 4.5V20M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 20v-1.5a4.5 4.5 0 0 0-3-4.2"/>'},
+  SUSPICIOUS_ACTIVITY:{n:'Suspicious activity',i:'<circle cx="11" cy="11" r="6.5"/><path d="m20.5 20.5-4.7-4.7"/>'}
+};
+const catOf=k=>CAT[k]||{n:String(k).replace(/_/g,' ').toLowerCase(),i:CAT.SUSPICIOUS_ACTIVITY.i};
+const icon=(k,s)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${catOf(k).i}</svg>`;
+const ago=t=>{const m=Math.max(0,Math.round((Date.now()-t)/6e4));if(m<1)return'just now';if(m<60)return m+' min ago';const h=Math.round(m/60);return h<48?h+' h ago':Math.round(h/24)+' days ago'};
+
+let KEY=store.get('rk')||'',hours=24,filter='ALL',sel=null,fitted=false,data=[],markers={};
+const hdr=()=>({'X-Responder-Key':KEY,'Content-Type':'application/json'});
+
+/* ---------- map ---------- */
+const map=L.map('map',{zoomControl:false}).setView([19.076,72.8777],11);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
+const layer=L.layerGroup().addTo(map);
+
+/* ---------- small helpers ---------- */
+let toastT;
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='show'+(err?' err':'');clearTimeout(toastT);toastT=setTimeout(()=>t.className='',2600)}
+function live(state,msg){$('live').className='live'+(state==='err'?' err':'');$('upd').textContent=msg}
+function openGate(msg){$('gateErr').textContent=msg||'';if(!$('gate').open)$('gate').showModal();$('key').value='';$('key').focus()}
+$('gate').addEventListener('cancel',e=>e.preventDefault());
+$('gateForm').onsubmit=e=>{e.preventDefault();KEY=$('key').value.trim();store.set('rk',KEY);$('gate').close();load()};
+
+/* ---------- actions ---------- */
+async function setStatus(id,status,btn){
+  btn.disabled=true;
+  try{
+    const r=await fetch(`/api/v1/dashboard/clusters/${id}/status`,{method:'POST',headers:hdr(),body:JSON.stringify({status,responder:$('who').value})});
+    if(!r.ok)throw new Error(r.status);
+    toast(status==='NEW'?'Reopened':'Marked '+STN[status].toLowerCase());
+  }catch(e){toast('Could not update the status. Try again.',true)}
+  load();
 }
-$('hrs').onchange=load;
-$('seed').onclick=async()=>{await fetch('/api/v1/dashboard/demo-seed',{method:'POST',headers:H});load();};
-fetch('/api/v1/dashboard/demo-seed',{method:'OPTIONS'}).then(()=>{if(location.search.includes('demo'))$('seed').style.display='inline'});
+
+function select(id,o={}){
+  sel=id;
+  document.querySelectorAll('.card').forEach(e=>e.classList.toggle('sel',e.dataset.id===id));
+  const c=data.find(x=>x.cluster_id===id),m=markers[id];
+  if(!c||!m)return;
+  if(o.fly)map.flyTo([c.lat,c.lng],16,{duration:.6});
+  const p=m.getPopup();p.options.autoPan=!o.silent;m.openPopup();p.options.autoPan=true;
+  if(o.scroll){const el=document.querySelector(`.card[data-id="${id}"]`);if(el)el.scrollIntoView({block:'nearest'})}
+}
+
+/* ---------- rendering ---------- */
+function pin(c,col,pulse,done){
+  return L.divIcon({className:'pin-wrap',iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-16],
+    html:`<div class="pin${pulse?' pulse':''}${done?' done':''}" style="--c:${col}">${c.report_count}</div>`});
+}
+
+function cardEl(c){
+  const done=c.status==='RESOLVED',i=ST.indexOf(c.status),next=ST[i+1];
+  const el=document.createElement('article');
+  el.className='card'+(done?' resolved':'')+(c.cluster_id===sel?' sel':'');
+  el.dataset.p=c.priority;el.dataset.id=c.cluster_id;el.tabIndex=0;
+  const people=c.unique_reporters===1?'reporter':'reporters';
+  const steps=ST.map((s,j)=>`<li class="${j<i?'done':j===i?'now':''}" style="--sc:${STC[c.status]}">${STN[s]}</li>`).join('');
+  const forward=ST.slice(i+1).map(s=>`<button class="btn${s===next?' primary':''}" data-s="${s}">${STV[s]}</button>`).join('');
+  el.innerHTML=`
+    <div class="c-head">
+      <span class="c-ico">${icon(c.category,20)}</span>
+      <div class="c-title"><h3>${esc(catOf(c.category).n)}</h3><p class="c-area">${esc(c.area)||'Area not specified'}</p></div>
+      <span class="pill ${done?'p-done':'p-'+c.priority}">${PN[c.priority]}</span>
+    </div>
+    <div class="c-facts">
+      <span><b>${c.report_count}</b> reports</span>
+      <span><b>${c.unique_reporters}</b> ${people}</span>
+      <span>${ago(c.last_ts)}</span>
+      <span class="ver${c.verified?' yes':''}" title="${c.verified?'Reported by two or more different people':'Only one reporter so far'}">${c.verified?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Verified':'Unverified'}</span>
+    </div>
+    <ol class="steps" aria-label="Status: ${STN[c.status]}">${steps}</ol>
+    ${c.responder?`<p class="c-by">${STN[c.status]} by ${esc(c.responder)}</p>`:''}
+    <div class="acts">${done?'<button class="btn" data-s="NEW">Reopen</button>':forward}</div>`;
+  el.onclick=()=>select(c.cluster_id,{fly:true});
+  el.onkeydown=e=>{if(e.target===el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(c.cluster_id,{fly:true})}};
+  el.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();setStatus(c.cluster_id,b.dataset.s,b)});
+  return el;
+}
+
+function render(){
+  // summary + filter chips
+  const open=data.filter(c=>c.status==='NEW').length;
+  $('sumT').textContent=!data.length?'No active hotspots':open?`${open} ${open===1?'hotspot needs':'hotspots need'} a response`:'Every hotspot is being handled';
+  $('sumS').textContent=data.length?`${data.length} ${data.length===1?'hotspot':'hotspots'} in the last ${hours<72?hours+' hours':hours/24+' days'}`:'Nothing to review in this time window.';
+  const n=k=>k==='ALL'?data.length:data.filter(c=>c.priority===k).length;
+  $('chips').innerHTML=['ALL','HIGH','MEDIUM','LOW'].map(k=>
+    `<button class="chip" data-f="${k}" aria-pressed="${filter===k}">${k==='ALL'?'All':`<i style="--c:${COL[k]}"></i>${PN[k]}`}<span>${n(k)}</span></button>`).join('');
+
+  // map + list
+  const vis=data.filter(c=>filter==='ALL'||c.priority===filter);
+  const scroll=$('list').scrollTop;
+  layer.clearLayers();markers={};$('list').innerHTML='';
+  if(!vis.length){
+    $('list').innerHTML=`<div class="empty"><div class="ring"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.1 7.5 9.5 4.4-1.4 7.5-4.9 7.5-9.5V6L12 3z"/></svg></div>
+      <h3>${data.length?'Nothing at this priority':'No active hotspots'}</h3>
+      <p>${data.length?'Pick another priority above to see the rest.':'A hotspot appears when two or more reports land within 500 m of each other inside two hours. Try a longer time range to see earlier activity.'}</p></div>`;
+  }
+  vis.forEach(c=>{
+    const done=c.status==='RESOLVED',col=done?COL.DONE:COL[c.priority];
+    L.circle([c.lat,c.lng],{radius:c.radius_m,color:col,weight:1.5,fillColor:col,fillOpacity:.14,interactive:false}).addTo(layer);
+    const m=L.marker([c.lat,c.lng],{icon:pin(c,col,c.priority==='HIGH'&&c.status==='NEW',done),title:catOf(c.category).n}).addTo(layer);
+    m.bindPopup(`<b>${esc(catOf(c.category).n)}</b>${c.report_count} reports from ${c.unique_reporters} ${c.unique_reporters===1?'person':'people'}<br>${STN[c.status]} · ${PN[c.priority]} priority`,{closeButton:false});
+    m.on('click',()=>select(c.cluster_id,{scroll:true}));
+    markers[c.cluster_id]=m;
+    $('list').appendChild(cardEl(c));
+  });
+  $('list').style.scrollBehavior='auto';$('list').scrollTop=scroll;$('list').style.scrollBehavior='';
+  if(sel&&markers[sel])select(sel,{silent:true});
+  if(vis.length&&!fitted){fit();fitted=true}
+}
+
+function fit(){
+  const vis=data.filter(c=>filter==='ALL'||c.priority===filter);
+  if(vis.length)map.fitBounds(vis.map(c=>[c.lat,c.lng]),{maxZoom:15,padding:[70,70]});
+}
+
+/* ---------- data ---------- */
+async function load(){
+  if(!KEY){openGate();return}
+  let r;
+  try{r=await fetch(`/api/v1/dashboard/clusters?hours=${hours}`,{headers:hdr()})}
+  catch(e){live('err','Can’t reach the server. Retrying…');return}
+  if(r.status===401){KEY='';store.del('rk');openGate('That key wasn’t recognised. Check it and try again.');return}
+  if(r.status===503){live('err','Dashboard is turned off on this server');
+    $('list').innerHTML='<div class="empty"><h3>Dashboard is turned off</h3><p>Ask the server admin to set RESPONDER_API_KEY, then reload this page.</p></div>';return}
+  if(!r.ok){live('err','Dashboard unavailable ('+r.status+')');return}
+  data=(await r.json()).clusters||[];
+  render();
+  live('ok','Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+}
+
+/* ---------- wiring ---------- */
+$('hrs').onclick=e=>{const b=e.target.closest('button');if(!b)return;hours=+b.dataset.h;
+  document.querySelectorAll('#hrs button').forEach(x=>x.setAttribute('aria-pressed',x===b));fitted=false;load()};
+$('chips').onclick=e=>{const b=e.target.closest('button');if(!b)return;filter=b.dataset.f;fitted=false;render()};
+$('fit').onclick=fit;
+$('who').value=lstore.get('who')||'';$('who').oninput=()=>lstore.set('who',$('who').value);
+$('seed').onclick=async()=>{await fetch('/api/v1/dashboard/demo-seed',{method:'POST',headers:hdr()});load()};
+if(location.search.includes('demo'))$('seed').hidden=false;
 load();setInterval(load,15000);
-</script></body></html>
+</script>
+</body>
+</html>
