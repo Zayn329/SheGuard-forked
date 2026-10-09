@@ -62,6 +62,7 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
 .pin.pulse::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--c);animation:ping 2.2s ease-out infinite}
 @keyframes ping{from{transform:scale(1);opacity:.85}to{transform:scale(2.3);opacity:0}}
 @media (prefers-reduced-motion:reduce){.pin.pulse::after{animation:none;transform:scale(1.5);opacity:.5}}
+#map.osm .leaflet-tile-pane{filter:saturate(.45) contrast(.95) brightness(1.05)}
 .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:var(--shadow)}
 .leaflet-popup-content{margin:12px 14px;font:13px/1.4 var(--font);color:var(--ink)}
 .leaflet-popup-content b{display:block;font-size:14px;margin-bottom:2px}
@@ -250,7 +251,16 @@ const hdr=()=>({'X-Responder-Key':KEY,'Content-Type':'application/json'});
 /* ---------- map ---------- */
 const map=L.map('map',{zoomControl:false}).setView([19.076,72.8777],11);
 L.control.zoom({position:'bottomright'}).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
+// Basemap. Works with no key by default (OpenStreetMap, fine for a small responder team).
+// For the cleaner CARTO look, get a free key at https://carto.com/basemaps/apikey and paste it here.
+const CARTO_KEY='';
+const ATTR='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+if(CARTO_KEY){
+  L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_KEY)}`,{maxZoom:19,attribution:ATTR+' © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
+}else{
+  $('map').classList.add('osm');  // mutes the colours so the hotspot pins stand out
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:ATTR}).addTo(map);
+}
 const layer=L.layerGroup().addTo(map);
 
 /* ---------- small helpers ---------- */
